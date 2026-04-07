@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/onboarding/screens/onboarding_welcome_screen.dart';
+import '../../features/onboarding/screens/onboarding_bundesland_screen.dart';
+import '../../features/onboarding/screens/onboarding_goal_screen.dart';
+import '../../features/onboarding/screens/onboarding_diagnosis_screen.dart';
+import '../../features/home/home_screen.dart';
+import '../../features/quiz/blitzrunde_screen.dart';
 
 // Route-Namen als Konstanten
 abstract class Routes {
@@ -35,30 +41,30 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: Routes.onboardingWelcome,
-      builder: (context, state) => const _PlaceholderScreen(title: 'Willkommen'),
+      builder: (context, state) => const OnboardingWelcomeScreen(),
     ),
     GoRoute(
       path: Routes.onboardingBundesland,
-      builder: (context, state) => const _PlaceholderScreen(title: 'Bundesland wählen'),
+      builder: (context, state) => const OnboardingBundeslandScreen(),
     ),
     GoRoute(
       path: Routes.onboardingGoal,
-      builder: (context, state) => const _PlaceholderScreen(title: 'Lernziel'),
+      builder: (context, state) => const OnboardingGoalScreen(),
     ),
     GoRoute(
       path: Routes.onboardingDiagnosis,
-      builder: (context, state) => const _PlaceholderScreen(title: 'Diagnose-Quiz'),
+      builder: (context, state) => const OnboardingDiagnosisScreen(),
     ),
     ShellRoute(
       builder: (context, state, child) => _MainShell(child: child),
       routes: [
         GoRoute(
           path: Routes.home,
-          builder: (context, state) => const _PlaceholderScreen(title: 'Home'),
+          builder: (context, state) => const HomeScreen(),
         ),
         GoRoute(
           path: Routes.quiz,
-          builder: (context, state) => const _PlaceholderScreen(title: 'Blitzrunde'),
+          builder: (context, state) => const BlitzrundeScreen(),
         ),
         GoRoute(
           path: Routes.lexikon,
