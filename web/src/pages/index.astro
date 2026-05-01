@@ -1,0 +1,273 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PhoneMockup from '../components/PhoneMockup.astro';
+
+const features = [
+  { icon: '🎣', title: 'Raubfisch-Fangtagebuch', text: 'Hecht, Zander, Barsch, Forelle, Rapfen & Co. – mit Köder, Führungsstil, Tiefe, Wasser- und Lufttemperatur.' },
+  { icon: '📍', title: 'Spinn-Spots & Hotspots', text: 'Pflege Kanten, Krautfelder, Strukturen und Einläufe. Halte fest, wo welcher Räuber wann gebissen hat.' },
+  { icon: '🗺️', title: 'Spot-Heatmap & Score', text: 'Sieh aus deiner eigenen Historie, wo Räuber stehen. Filter nach Spezies, Saison, Tageszeit, Köderfarbe.' },
+  { icon: '🎒', title: 'Tour-Planung', text: 'Plane Spinn-Touren, lade Angelbuddies ein, teile Spots, Köderboxen und Notizen – mit Cloud-Sync.' },
+  { icon: '🌤️', title: 'Wetter für Räuber', text: 'Luftdruck, Mondphase, Wind, Sonnenstand – aufbereitet auf das, was beim Spinnfischen wirklich zählt.' },
+  { icon: '🪝', title: 'Köderbox & Köderlevel', text: 'Verwalte Gummis, Wobbler, Spinner, Jerks. Jeder Köder levelt durch echte Fänge mit – sieh, was wirklich läuft.' },
+  { icon: '📚', title: 'Räuber-Lexikon', text: 'Schonzeiten, Mindestmaße, Beuteschema, Standplätze – Wissen, das vor dem ersten Wurf entscheidet.' },
+  { icon: '🏆', title: 'Missionen & Skills', text: '„Erster Hecht über 90", „Zander auf Gummi nachts" – Missionen, die deinen Spinnfischer-Fortschritt sichtbar machen.' },
+];
+
+const audiences = [
+  'Hecht-Jäger, die Spots, Köder und Bedingungen datenbasiert kombinieren',
+  'Zander-Angler, die Tageszeit, Mondphase und Köderführung systematisch auswerten',
+  'Barsch-Spezialisten, die Schwarmstellen und Microbait-Sessions tracken',
+  'Spinnangler-Crews, die Touren, Köderboxen und Hotspots gemeinsam pflegen',
+];
+
+const timeline = [
+  { state: 'done', title: 'Kern-App', text: 'Catches, Spots, Trips, Karte, Heatmap, Wetter, Lexikon, Missionen, Köderlevel.' },
+  { state: 'done', title: 'Cloud-Sync & Trip-Sharing', text: 'Owner/Member-Logik, saubere Konto-Löschung, Apple Sign-In & Google Sign-In.' },
+  { state: 'active', title: 'Beta & Feinschliff', text: 'Tests, Crash-Reporting, Performance, finale Texte und Screenshots.' },
+  { state: 'todo', title: 'Store-Submission', text: 'App Store & Google Play – Phase aktiv in Vorbereitung.' },
+  { state: 'todo', title: 'Public Launch', text: 'Sobald alle Reviews durch sind. Trag dich ein, dann erfährst du es als Erste:r.' },
+];
+
+const description = 'Hooked ist das digitale Fangtagebuch für Raubfisch- und Spinnangler: Hecht, Zander, Barsch & Co. dokumentieren, Spot-Heatmap aus eigener Historie, Touren planen, Wetter & Mondphase, Köderbox mit Level-System und Räuber-Lexikon. Aktuell in Entwicklung.';
+---
+<Base
+  title="Hooked – Fangtagebuch für Raubfisch- & Spinnangler | Hecht, Zander, Barsch"
+  description={description}
+  path="/"
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'MobileApplication',
+          name: 'Hooked – Fangtagebuch für Raubfischangler',
+          description,
+          applicationCategory: 'LifestyleApplication',
+          operatingSystem: 'iOS, Android',
+          inLanguage: 'de',
+          url: 'https://hooked-fangtagebuch.app/',
+          image: 'https://hooked-fangtagebuch.app/og-image.png',
+          softwareVersion: 'Beta',
+          releaseNotes: 'App befindet sich aktuell in Entwicklung.',
+          offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+        },
+        {
+          '@type': 'Organization',
+          name: 'Hooked',
+          url: 'https://hooked-fangtagebuch.app/',
+          logo: 'https://hooked-fangtagebuch.app/logo.png',
+        },
+        {
+          '@type': 'WebSite',
+          name: 'Hooked – Fangtagebuch',
+          url: 'https://hooked-fangtagebuch.app/',
+          inLanguage: 'de',
+        },
+        {
+          '@type': 'FAQPage',
+          mainEntity: [
+            {
+              '@type': 'Question',
+              name: 'Für wen ist Hooked gemacht?',
+              acceptedAnswer: { '@type': 'Answer', text: 'Hooked ist speziell für Raubfisch- und Spinnangler entwickelt: Hecht, Zander, Barsch, Forelle, Rapfen & Co. Mit Spot-Heatmap, Köderbox, Wetter & Mondphase, Tour-Planung und Räuber-Lexikon.' },
+            },
+            {
+              '@type': 'Question',
+              name: 'Wann erscheint die App?',
+              acceptedAnswer: { '@type': 'Answer', text: 'Hooked befindet sich aktuell in der Beta-Phase. Der Launch im App Store und Google Play ist in Vorbereitung.' },
+            },
+            {
+              '@type': 'Question',
+              name: 'Ist Hooked DSGVO-konform?',
+              acceptedAnswer: { '@type': 'Answer', text: 'Ja. Hooked verfügt über einen integrierten Konto-Lösch-Button, transparente Datennutzung und unterstützt Apple Sign-In sowie Google Sign-In.' },
+            },
+          ],
+        },
+      ],
+    })} />
+  </Fragment>
+
+  <Header />
+
+  <main id="main">
+    <!-- HERO -->
+    <section class="relative overflow-hidden">
+      <div aria-hidden="true" class="absolute inset-0 -z-10 grid-bg opacity-60"></div>
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-6 py-20 md:py-28 lg:grid-cols-[1.1fr_0.9fr]">
+        <div data-reveal class="opacity-0">
+          <span class="inline-flex items-center gap-2 rounded-full border border-[var(--color-brand)]/40 bg-[var(--color-brand)]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-brand)]">
+            <span class="h-2 w-2 rounded-full bg-[var(--color-brand)] pulse-dot"></span>
+            In Entwicklung · Launch in Vorbereitung
+          </span>
+          <h1 class="mt-5 font-display text-[clamp(36px,5.5vw,64px)] font-bold leading-[1.05] tracking-[-0.02em]">
+            Das Fangtagebuch für <span class="text-[var(--color-brand)]">Raubfischangler</span>.
+            <span class="block text-[var(--color-text-secondary)] font-medium text-[clamp(20px,2.4vw,28px)] mt-3 tracking-normal">
+              Hecht. Zander. Barsch. Mehr Bisse durch echte Daten.
+            </span>
+          </h1>
+          <p class="mt-5 max-w-[58ch] text-[clamp(15px,1.4vw,18px)] text-[var(--color-text-secondary)]">
+            Hooked ist gebaut für Spinnangler. Dokumentiere Köder, Führungsstil, Tiefe, Wetter und Mondphase – sieh in der
+            Heatmap, wo deine Räuber wirklich stehen, und levelst Wobbler, Gummi und Spinner durch echte Fänge.
+          </p>
+          <div class="mt-7 flex flex-wrap gap-3">
+            <a
+              href="#kontakt"
+              class="group inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-5 py-3 text-sm font-bold text-[#001a14] shadow-[0_10px_28px_rgb(0_212_170/0.3)] transition hover:-translate-y-0.5 hover:bg-[#14e0b9]"
+            >
+              Beim Launch dabei sein
+              <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <a
+              href="#features"
+              class="inline-flex items-center rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)]/60 px-5 py-3 text-sm font-bold text-[var(--color-text-primary)] backdrop-blur transition hover:bg-[var(--color-surface)]"
+            >
+              Features ansehen
+            </a>
+          </div>
+          <p class="mt-5 text-[13px] text-[var(--color-text-muted)]">
+            Geplant für iOS &amp; Android · Sprache: Deutsch · DSGVO-konform
+          </p>
+        </div>
+
+        <div data-reveal class="opacity-0">
+          <PhoneMockup />
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS / SOCIAL PROOF STRIP -->
+    <section aria-label="Kennzahlen" class="border-y border-[var(--color-border-soft)] bg-[var(--color-surface)]/40 py-8">
+      <div class="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-6 text-center md:grid-cols-4">
+        {[
+          { k: '8+', v: 'Kern-Module' },
+          { k: '100%', v: 'Offline-fähig' },
+          { k: '0', v: 'Tracking-SDKs' },
+          { k: 'DE', v: 'Made in' },
+        ].map((s) => (
+          <div data-reveal class="opacity-0">
+            <p class="font-display text-3xl font-bold text-[var(--color-brand)]">{s.k}</p>
+            <p class="text-xs uppercase tracking-widest text-[var(--color-text-muted)]">{s.v}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section id="features" class="mx-auto max-w-6xl px-6 py-24">
+      <header class="mx-auto max-w-2xl text-center">
+        <p class="text-xs font-bold uppercase tracking-[0.22em] text-[var(--color-brand)]">Features</p>
+        <h2 class="mt-2 font-display text-[clamp(28px,3.4vw,42px)] font-bold tracking-tight">Gebaut für Räuber-Sessions</h2>
+        <p class="mt-3 text-[var(--color-text-secondary)]">Vom ersten Wurf bis zur Auswertung – alles, was Spinnangler nach dem Drill wirklich brauchen.</p>
+      </header>
+
+      <div class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {features.map((f, i) => (
+          <article
+            data-reveal
+            class="group relative gradient-border rounded-2xl p-5 opacity-0 transition hover:-translate-y-1"
+            style={`animation-delay: ${i * 60}ms`}
+          >
+            <div class="text-2xl">{f.icon}</div>
+            <h3 class="mt-3 font-display text-xl font-bold">{f.title}</h3>
+            <p class="mt-1.5 text-sm text-[var(--color-text-secondary)]">{f.text}</p>
+            <div aria-hidden="true" class="absolute inset-x-0 bottom-0 mx-auto h-px w-2/3 bg-gradient-to-r from-transparent via-[var(--color-brand)]/40 to-transparent opacity-0 transition group-hover:opacity-100"></div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <!-- SPLIT: AUDIENCE + QUOTE -->
+    <section id="fuer-wen" class="border-y border-[var(--color-border-soft)] bg-gradient-to-b from-transparent via-[var(--color-surface)]/40 to-transparent py-24">
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-6 lg:grid-cols-[1.1fr_1fr]">
+        <div data-reveal class="opacity-0">
+          <p class="text-xs font-bold uppercase tracking-[0.22em] text-[var(--color-brand)]">Für wen</p>
+          <h2 class="mt-2 font-display text-[clamp(26px,3vw,38px)] font-bold tracking-tight">
+            Für Spinnangler, die mehr wollen als ein Foto.
+          </h2>
+          <p class="mt-4 text-[var(--color-text-secondary)]">
+            Hooked entsteht aus echter Praxis am Wasser. Hecht, Zander, Barsch, Forelle, Rapfen –
+            du dokumentierst Köder, Bedingungen und Spots, vergleichst Sessions und triffst die nächste Köderentscheidung
+            datenbasiert statt nach Bauchgefühl.
+          </p>
+          <ul class="mt-5 grid gap-2.5">
+            {audiences.map((a) => (
+              <li class="flex items-start gap-3 text-[var(--color-text-secondary)]">
+                <span aria-hidden="true" class="mt-1.5 inline-block h-1.5 w-1.5 flex-none rounded-full bg-[var(--color-brand)]"></span>
+                <span>{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <figure data-reveal class="opacity-0 gradient-border rounded-2xl p-6">
+          <svg aria-hidden="true" class="mb-3 h-6 w-6 text-[var(--color-brand)]" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h4v4H7V7zm0 6h4v4H7v-4zm6-6h4v4h-4V7zm0 6h4v4h-4v-4z"/></svg>
+          <blockquote class="font-display text-xl leading-snug text-[var(--color-text-primary)]">
+            „Endlich eine App, die <em class="text-[var(--color-brand)] not-italic">versteht</em>, warum der Hecht beim dritten Wurf gebissen hat – nicht nur, dass er es tat."
+          </blockquote>
+          <figcaption class="mt-3 text-sm text-[var(--color-text-muted)]">– aus der internen Beta</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section id="status" class="mx-auto max-w-3xl px-6 py-24">
+      <header class="text-center">
+        <p class="text-xs font-bold uppercase tracking-[0.22em] text-[var(--color-brand)]">Entwicklungsstand</p>
+        <h2 class="mt-2 font-display text-[clamp(26px,3vw,38px)] font-bold tracking-tight">Wo steht Hooked gerade?</h2>
+        <p class="mt-3 text-[var(--color-text-secondary)]">Transparent statt Marketing-Versprechen.</p>
+      </header>
+
+      <ol class="relative mt-12 space-y-3">
+        <span aria-hidden="true" class="absolute left-[26px] top-2 bottom-2 w-px bg-gradient-to-b from-[var(--color-brand)]/60 via-[var(--color-border-soft)] to-transparent"></span>
+        {timeline.map((t) => (
+          <li
+            data-reveal
+            class="relative ml-1 flex items-start gap-4 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-4 pl-14 opacity-0"
+          >
+            <span
+              class={`absolute left-4 top-4 grid h-6 w-6 place-items-center rounded-full border-2 ${
+                t.state === 'done'
+                  ? 'border-[var(--color-brand)] bg-[var(--color-brand)]'
+                  : t.state === 'active'
+                  ? 'border-[var(--color-score-mid)] bg-[var(--color-score-mid)] pulse-dot'
+                  : 'border-[var(--color-border-soft)] bg-[var(--color-surface-2)]'
+              }`}
+            >
+              {t.state === 'done' && (
+                <svg class="h-3 w-3 text-[#001a14]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M5 12l5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              )}
+            </span>
+            <div>
+              <p class="font-display text-base font-bold tracking-wide">{t.title}</p>
+              <p class="text-sm text-[var(--color-text-secondary)]">{t.text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <!-- CTA -->
+    <section id="kontakt" class="mx-auto max-w-4xl px-6 py-24">
+      <div data-reveal class="relative overflow-hidden rounded-3xl border border-[var(--color-brand)]/30 bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-bg)] p-10 text-center opacity-0 shadow-[var(--shadow-glow)]">
+        <div aria-hidden="true" class="absolute -top-24 right-0 h-64 w-64 rounded-full bg-[var(--color-brand)]/10 blur-3xl"></div>
+        <p class="text-xs font-bold uppercase tracking-[0.22em] text-[var(--color-brand)]">Kontakt</p>
+        <h2 class="mt-2 font-display text-[clamp(26px,3vw,38px)] font-bold tracking-tight">Sei dabei, bevor die Schnur straff wird.</h2>
+        <p class="mx-auto mt-3 max-w-xl text-[var(--color-text-secondary)]">
+          Hooked startet in Kürze. Schreib uns – du erfährst es als Erste:r, wenn die App im Store ist.
+        </p>
+        <div class="mt-7 flex flex-wrap justify-center gap-3">
+          <a
+            class="inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-5 py-3 text-sm font-bold text-[#001a14] shadow-[0_10px_28px_rgb(0_212_170/0.3)] transition hover:-translate-y-0.5 hover:bg-[#14e0b9]"
+            href="mailto:hello@hooked-fangtagebuch.app?subject=Beim%20Hooked-Launch%20dabei%20sein"
+          >
+            hello@hooked-fangtagebuch.app
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Base>

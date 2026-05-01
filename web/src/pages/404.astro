@@ -1,0 +1,21 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base title="Seite nicht gefunden – Hooked" description="404 – Die gesuchte Seite existiert nicht." path="/404" noindex>
+  <Header />
+  <main id="main" class="mx-auto max-w-2xl px-6 py-32 text-center">
+    <p class="font-display text-7xl font-bold text-[var(--color-brand)]">404</p>
+    <h1 class="mt-3 font-display text-3xl font-bold">Diese Seite gibt's nicht.</h1>
+    <p class="mt-3 text-[var(--color-text-secondary)]">Vielleicht ein Tippfehler – oder du folgst einem alten Link.</p>
+    <a
+      href="/"
+      class="mt-8 inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-5 py-3 text-sm font-bold text-[#001a14] shadow-[0_10px_28px_rgb(0_212_170/0.3)] transition hover:-translate-y-0.5 hover:bg-[#14e0b9]"
+    >
+      Zurück zu Hooked
+      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  </main>
+  <Footer />
+</Base>

@@ -1,0 +1,60 @@
+// Firestore Security Rules für Hooked
+//
+// Deployment:
+//   firebase deploy --only firestore:rules
+//
+// Schema:
+//   /sharedTrips/{tripId}   — Trip-Daten, eingeloggter Owner schreibt
+//   /invites/{token}        — Einladungs-Token (Lesen = jeder eingeloggte)
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Geteilte Trips: nur der Owner darf schreiben/löschen.
+    // Eingeladene dürfen lesen (Pull-Refresh), aber nicht editieren.
+    // Trip-IDs sind UUIDv4 (122 bit Entropie) — nicht ratbar.
+    match /sharedTrips/{tripId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            && resource.data.ownerUid == request.auth.uid;
+
+      // Teilnehmer: jeder Auth-User darf seinen eigenen Eintrag
+      // anlegen/aktualisieren. Lesen darf jeder Auth-User. Löschen darf
+      // man sich selbst — der Trip-Owner darf zusätzlich beliebige
+      // Teilnehmer entfernen.
+      match /participants/{participantId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+                              && participantId == request.auth.uid
+                              && request.resource.data.uid == request.auth.uid;
+        allow delete: if request.auth != null
+                      && (participantId == request.auth.uid
+                          || get(/databases/$(database)/documents/sharedTrips/$(tripId))
+                                 .data.ownerUid == request.auth.uid);
+      }
+    }
+
+    // Einladungs-Token: jeder eingeloggte Nutzer darf lesen, nur der
+    // Einladungs-Token: jeder eingeloggte Nutzer darf lesen + löschen
+    // (Single-Use: Einlöser invalidiert den Token sofort). Update bleibt
+    // dem Aussteller vorbehalten. Tokens sind 8 Zeichen aus 32er-Alphabet
+    // (≈ 1 Billion Kombinationen) — clientseitig nicht enumerierbar.
+    match /invites/{token} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid;
+      allow delete: if request.auth != null;
+    }
+
+    // Collection-Group-Query auf alle `participants`-Subcollections.
+    // Wird beim Multi-Device-Login genutzt, um geteilte Trips wieder-
+    // herzustellen, in denen der User Teilnehmer ist.
+    match /{path=**}/participants/{participantId} {
+      allow read: if request.auth != null;
+    }
+  }
+}

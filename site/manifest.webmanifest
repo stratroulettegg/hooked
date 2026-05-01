@@ -1,0 +1,13 @@
+{
+  "name": "Hooked – Fangtagebuch",
+  "short_name": "Hooked",
+  "description": "Digitales Fangtagebuch für Angler – Spots, Heatmap, Trips & Wetter.",
+  "lang": "de",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06090F",
+  "theme_color": "#06090F",
+  "icons": [
+    { "src": "/assets/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

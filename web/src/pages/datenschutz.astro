@@ -1,0 +1,43 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base
+  title="Datenschutz – Hooked Fangtagebuch"
+  description="Datenschutzerklärung der Hooked Fangtagebuch-App und Website."
+  path="/datenschutz"
+  noindex
+>
+  <Header />
+  <main id="main" class="mx-auto max-w-3xl px-6 py-20">
+    <p class="text-xs font-bold uppercase tracking-[0.22em] text-[var(--color-brand)]">Rechtliches</p>
+    <h1 class="mt-2 font-display text-4xl font-bold">Datenschutzerklärung</h1>
+    <p class="mt-2 text-[var(--color-text-secondary)]">Stand: April 2026 · Vorläufige Fassung während der Entwicklungsphase.</p>
+
+    <div class="prose mt-8 space-y-6 text-[var(--color-text-secondary)] [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[var(--color-text-primary)] [&_h2]:mt-8">
+      <h2>1. Verantwortlicher</h2>
+      <p>Die Hooked App und diese Website werden während der Entwicklungsphase betrieben durch den Eigentümer der Domain <strong>hooked-fangtagebuch.app</strong>. Konkrete Kontaktdaten siehe <a class="text-[var(--color-brand)] hover:underline" href="/impressum">Impressum</a>.</p>
+
+      <h2>2. Welche Daten verarbeitet werden</h2>
+      <p>Auf dieser Website (statisches Hosting via Firebase Hosting) werden keine Cookies gesetzt und kein Tracking durchgeführt. Es findet keine Profilbildung statt. Beim Aufruf werden vom Hosting-Provider technisch notwendige Server-Logs (IP-Adresse, Zeitstempel, User-Agent) zur Auslieferung und Sicherheit kurzzeitig verarbeitet.</p>
+      <p>Innerhalb der mobilen App werden – ausschließlich nach deiner aktiven Anmeldung – Account-Stammdaten (E-Mail, Anzeigename), deine selbst eingegebenen Inhalte (Fänge, Spots, Trips, Notizen, Bilder) sowie optionale Standortdaten verarbeitet, um dir die Funktionalität bereitzustellen.</p>
+
+      <h2>3. Drittanbieter</h2>
+      <ul class="list-disc pl-6 space-y-1">
+        <li><strong>Firebase Hosting / Firestore / Authentication</strong> (Google Ireland Ltd.) – Bereitstellung der Website und der App-Cloud-Funktionen.</li>
+        <li><strong>Google Sign-In / Sign in with Apple</strong> – Optionale Anmeldeverfahren in der App.</li>
+        <li><strong>Google Fonts</strong> – Schriftarten werden vom Google CDN nachgeladen.</li>
+      </ul>
+
+      <h2>4. Deine Rechte</h2>
+      <p>Du hast jederzeit Anspruch auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit sowie das Recht, der Verarbeitung zu widersprechen. In der App existiert ein integrierter Konto-Lösch-Button, der deinen Account und alle zugehörigen Cloud-Daten entfernt.</p>
+
+      <h2>5. Kontakt</h2>
+      <p>Für Datenschutzanfragen erreichst du uns unter <a class="text-[var(--color-brand)] hover:underline" href="mailto:hello@hooked-fangtagebuch.app">hello@hooked-fangtagebuch.app</a>.</p>
+
+      <p class="text-sm text-[var(--color-text-muted)]">Hinweis: Diese Erklärung wird vor dem öffentlichen Launch durch eine vollständige, juristisch geprüfte Fassung ersetzt.</p>
+    </div>
+  </main>
+  <Footer />
+</Base>

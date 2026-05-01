@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "162244151198",
+    "project_id": "hooked-fangtagebuch",
+    "storage_bucket": "hooked-fangtagebuch.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:162244151198:android:533264b45d3baf3245f88f",
+        "android_client_info": {
+          "package_name": "de.apex.hooked"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "162244151198-02qd0nfgpv35qf0k5ecof8siurp4lqgi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "de.apex.hooked",
+            "certificate_hash": "70546bbec6c95192a4369c0d03576e4efd89c629"
+          }
+        },
+        {
+          "client_id": "162244151198-m692aq43lpueje9ht9mj53j1gvp9v3af.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCG4SOU4yyAUjH4DxYWblcTvxpv9lmn6yU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "162244151198-m692aq43lpueje9ht9mj53j1gvp9v3af.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "162244151198-ku0iu6f6p9je5l0s9eb7m2k08vdt5esp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "de.apex.hooked"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

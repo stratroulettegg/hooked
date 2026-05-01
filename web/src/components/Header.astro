@@ -1,0 +1,33 @@
+---
+const { active = '' } = Astro.props as { active?: string };
+const links = [
+  { href: '/#features', label: 'Features' },
+  { href: '/#fuer-wen', label: 'Für wen' },
+  { href: '/#status', label: 'Status' },
+  { href: '/#kontakt', label: 'Kontakt' },
+];
+---
+<header class="sticky top-0 z-30 border-b border-[var(--color-border-soft)]/60 backdrop-blur-xl bg-[rgb(6_9_15/0.72)]">
+  <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+    <a href="/" aria-label="Hooked Startseite" class="flex items-center gap-3 group">
+      <span class="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--color-surface)] ring-1 ring-[var(--color-border-soft)] overflow-hidden">
+        <img src="/logo.png" alt="" width="36" height="36" class="h-9 w-9 object-cover" />
+      </span>
+      <span class="font-display text-lg font-bold tracking-[0.32em] text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)] transition-colors">HOOKED</span>
+    </a>
+    <nav aria-label="Hauptnavigation" class="hidden gap-7 md:flex">
+      {links.map((l) => (
+        <a
+          href={l.href}
+          class={`text-sm font-medium transition-colors ${active === l.href ? 'text-[var(--color-brand)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'}`}
+        >{l.label}</a>
+      ))}
+    </nav>
+    <a
+      href="/#kontakt"
+      class="hidden md:inline-flex items-center rounded-full border border-[var(--color-brand)]/40 bg-[var(--color-brand)]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[var(--color-brand)] hover:bg-[var(--color-brand)]/20 transition"
+    >
+      Beim Launch dabei
+    </a>
+  </div>
+</header>

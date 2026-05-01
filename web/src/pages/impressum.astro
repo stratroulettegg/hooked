@@ -1,0 +1,36 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base
+  title="Impressum – Hooked Fangtagebuch"
+  description="Impressum und Anbieterkennzeichnung von Hooked."
+  path="/impressum"
+  noindex
+>
+  <Header />
+  <main id="main" class="mx-auto max-w-3xl px-6 py-20">
+    <p class="text-xs font-bold uppercase tracking-[0.22em] text-[var(--color-brand)]">Rechtliches</p>
+    <h1 class="mt-2 font-display text-4xl font-bold">Impressum</h1>
+    <p class="mt-2 text-[var(--color-text-secondary)]">Angaben gemäß § 5 DDG / TMG · Vorläufige Fassung während der Entwicklungsphase.</p>
+
+    <div class="mt-8 space-y-6 text-[var(--color-text-secondary)] [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[var(--color-text-primary)] [&_h2]:mt-8">
+      <h2>Anbieter</h2>
+      <p>Die Hooked App und diese Website befinden sich aktuell in privater Entwicklung. Vor öffentlichem Launch im App Store und Google Play wird an dieser Stelle die vollständige Anbieterkennzeichnung (Name, Anschrift, USt-ID sofern zutreffend) ergänzt.</p>
+
+      <h2>Kontakt</h2>
+      <p>E-Mail: <a class="text-[var(--color-brand)] hover:underline" href="mailto:hello@hooked-fangtagebuch.app">hello@hooked-fangtagebuch.app</a></p>
+
+      <h2>Haftung für Inhalte</h2>
+      <p>Als Diensteanbieter sind wir gemäß § 7 Abs. 1 DDG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 DDG sind wir als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen.</p>
+
+      <h2>Haftung für Links</h2>
+      <p>Unser Angebot enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen Einfluss haben. Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter verantwortlich.</p>
+
+      <h2>Urheberrecht</h2>
+      <p>Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht.</p>
+    </div>
+  </main>
+  <Footer />
+</Base>

@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#06090F" />
+  <meta name="color-scheme" content="dark" />
+
+  <title>Hooked – Dein digitales Fangtagebuch für Angler | Spots, Heatmap & Wettervorhersage</title>
+  <meta name="description" content="Hooked ist das digitale Fangtagebuch für moderne Angler. Erfasse Fänge, plane Trips, finde deine besten Spots per Heatmap und nutze tagesgenaue Wettervorhersagen. Jetzt in Entwicklung – sei beim Launch dabei." />
+  <meta name="keywords" content="Fangtagebuch, Angeln App, Angler App, Fang App, Angel Spots, Spot Heatmap, Köderlevel, Angeltrips planen, Angelwetter, Angelvorhersage, Hechtangeln, Karpfenangeln, digitales Angelbuch" />
+  <meta name="author" content="Hooked" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+
+  <link rel="canonical" href="https://hooked-fangtagebuch.app/" />
+  <link rel="alternate" hreflang="de" href="https://hooked-fangtagebuch.app/" />
+  <link rel="alternate" hreflang="x-default" href="https://hooked-fangtagebuch.app/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="de_DE" />
+  <meta property="og:site_name" content="Hooked" />
+  <meta property="og:title" content="Hooked – Dein digitales Fangtagebuch" />
+  <meta property="og:description" content="Fänge dokumentieren, Spots entdecken, Trips planen. Eine App, gemacht für Angler. In Entwicklung – jetzt vormerken." />
+  <meta property="og:url" content="https://hooked-fangtagebuch.app/" />
+  <meta property="og:image" content="https://hooked-fangtagebuch.app/assets/og-image.svg" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Hooked – Dein digitales Fangtagebuch" />
+  <meta name="twitter:description" content="Fänge dokumentieren, Spots entdecken, Trips planen. In Entwicklung." />
+  <meta name="twitter:image" content="https://hooked-fangtagebuch.app/assets/og-image.svg" />
+
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/assets/styles.css" />
+
+  <!-- Strukturierte Daten -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "MobileApplication",
+        "name": "Hooked – Fangtagebuch",
+        "description": "Digitales Fangtagebuch für Angler mit Spot-Verwaltung, Heatmap aus eigener Historie, Trip-Planung, Wettervorhersage, Köderlevel-System und Fischlexikon.",
+        "applicationCategory": "LifestyleApplication",
+        "operatingSystem": "iOS, Android",
+        "inLanguage": "de",
+        "url": "https://hooked-fangtagebuch.app/",
+        "image": "https://hooked-fangtagebuch.app/assets/og-image.svg",
+        "softwareVersion": "Beta",
+        "releaseNotes": "App befindet sich aktuell in Entwicklung.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR"
+        }
+      },
+      {
+        "@type": "Organization",
+        "name": "Hooked",
+        "url": "https://hooked-fangtagebuch.app/",
+        "logo": "https://hooked-fangtagebuch.app/assets/favicon.svg"
+      },
+      {
+        "@type": "WebSite",
+        "name": "Hooked – Fangtagebuch",
+        "url": "https://hooked-fangtagebuch.app/",
+        "inLanguage": "de"
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="brand" href="/" aria-label="Hooked Startseite">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" focusable="false">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#00D4AA"/>
+                <stop offset="100%" stop-color="#009E7E"/>
+              </linearGradient>
+            </defs>
+            <path fill="url(#g)" d="M16 3c-3 0-5.5 2.2-5.5 5.2 0 2.6 1.8 4.1 3.4 5.4 1.6 1.3 2.6 2.2 2.6 4.1v8.8c0 1.4-1 2.5-2.4 2.5-1.5 0-2.6-1.1-2.6-2.6 0-.9.4-1.6 1-2.1l-1.7-1.7c-1.1.9-1.8 2.3-1.8 3.8 0 3 2.4 5.4 5.4 5.4 3 0 5.4-2.4 5.4-5.4v-8.8c0-3.1-1.7-4.5-3.3-5.8-1.5-1.2-2.7-2-2.7-3.6 0-1.5 1.2-2.7 2.7-2.7s2.7 1.2 2.7 2.7c0 .8-.4 1.5-.9 2l1.7 1.7c1-1 1.6-2.3 1.6-3.7C21.5 5.2 19 3 16 3z"/>
+          </svg>
+        </span>
+        <span class="brand-text">HOOKED</span>
+      </a>
+      <nav aria-label="Hauptnavigation" class="nav">
+        <a href="#features">Features</a>
+        <a href="#fuer-wen">Für wen</a>
+        <a href="#status">Status</a>
+        <a href="#kontakt">Kontakt</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div class="hero-text">
+          <span class="badge" role="status">
+            <span class="dot" aria-hidden="true"></span>
+            In Entwicklung – Launch in Vorbereitung
+          </span>
+          <h1 id="hero-title">Dein <span class="accent">digitales Fangtagebuch</span> – ernst gemeint.</h1>
+          <p class="lead">
+            Hooked dokumentiert deine Fänge, lernt deine besten Spots aus deiner Historie und plant deine nächsten Trips –
+            mit präziser Wettervorhersage, Spot-Heatmap und einem Köderlevel-System, das deinen Fortschritt sichtbar macht.
+          </p>
+          <ul class="cta-row" role="list">
+            <li><a class="btn btn-primary" href="#kontakt">Beim Launch dabei sein</a></li>
+            <li><a class="btn btn-ghost" href="#features">Features ansehen</a></li>
+          </ul>
+          <p class="meta">Geplant für iOS &amp; Android · Sprache: Deutsch · Datenschutz: DSGVO-konform</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="phone">
+            <div class="phone-screen">
+              <div class="screen-header">
+                <span class="screen-time">9:41</span>
+                <span class="screen-title">HOOKED</span>
+                <span class="screen-icon">≡</span>
+              </div>
+              <div class="screen-card">
+                <div class="card-row"><span class="chip chip-strike">Hecht</span><span class="card-len">68 cm</span></div>
+                <div class="card-meta">Plauer See · 06:42 · 12 °C</div>
+                <div class="bar"><span style="width: 78%"></span></div>
+              </div>
+              <div class="screen-card">
+                <div class="card-row"><span class="chip">Zander</span><span class="card-len">54 cm</span></div>
+                <div class="card-meta">Hafenkante · 19:08 · 14 °C</div>
+                <div class="bar"><span style="width: 62%"></span></div>
+              </div>
+              <div class="screen-card heat">
+                <div class="card-row"><span class="chip chip-score">Spot-Score 92</span></div>
+                <div class="heat-grid">
+                  <span class="h h0"></span><span class="h h1"></span><span class="h h2"></span><span class="h h3"></span>
+                  <span class="h h2"></span><span class="h h3"></span><span class="h h4"></span><span class="h h3"></span>
+                  <span class="h h1"></span><span class="h h3"></span><span class="h h4"></span><span class="h h2"></span>
+                </div>
+              </div>
+              <div class="screen-nav">
+                <span>● Catches</span><span>Spots</span><span>Trips</span><span>Mehr</span>
+              </div>
+            </div>
+            <div class="phone-glow"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section" aria-labelledby="features-title">
+      <div class="container">
+        <header class="section-head">
+          <p class="kicker">FEATURES</p>
+          <h2 id="features-title">Mehr als ein Fanglogbuch</h2>
+          <p class="subline">Alles, was ein Angler nach dem Drill wirklich braucht – in einer App.</p>
+        </header>
+        <div class="cards" role="list">
+          <article class="card" role="listitem">
+            <div class="card-icon">📒</div>
+            <h3>Fangtagebuch</h3>
+            <p>Erfasse Art, Länge, Gewicht, Köder, Methode, Wetter und Bilder. Strukturiert, schnell, durchsuchbar.</p>
+          </article>
+          <article class="card" role="listitem">
+            <div class="card-icon">📍</div>
+            <h3>Spot-Verwaltung</h3>
+            <p>Pflege deine Stellen, vergib Notizen und Erfahrungen, hänge Catches direkt an Spots.</p>
+          </article>
+          <article class="card" role="listitem">
+            <div class="card-icon">🗺️</div>
+            <h3>Karte &amp; Heatmap</h3>
+            <p>Sieh deine Erfolge geografisch. Filtere nach Spezies, Saison und Tageszeit – dein Spot-Score auf einen Blick.</p>
+          </article>
+          <article class="card" role="listitem">
+            <div class="card-icon">🎒</div>
+            <h3>Trip-Planung</h3>
+            <p>Plane Sessions, lade Buddies ein, teile Spots, Packliste und Notizen – mit Cloud-Sync.</p>
+          </article>
+          <article class="card" role="listitem">
+            <div class="card-icon">🌤️</div>
+            <h3>Wetter &amp; Vorhersage</h3>
+            <p>Tagesgenaue Vorhersage für Trips: Temperatur, Wind, Druck, Sonnenstand – speziell für Angler aufbereitet.</p>
+          </article>
+          <article class="card" role="listitem">
+            <div class="card-icon">🏆</div>
+            <h3>Köderlevel &amp; Missionen</h3>
+            <p>Level deine Köder durch echte Fänge. Miss dich an Missionen, die deine Skills erweitern.</p>
+          </article>
+          <article class="card" role="listitem">
+            <div class="card-icon">📚</div>
+            <h3>Fischlexikon</h3>
+            <p>Schonzeiten, Mindestmaße, Lebensraum – Wissen, das beim Drill und vor dem Wurf hilft.</p>
+          </article>
+          <article class="card" role="listitem">
+            <div class="card-icon">🔒</div>
+            <h3>Privatsphäre zuerst</h3>
+            <p>Deine Daten gehören dir. DSGVO-konform, mit echtem Account-Lösch-Button und transparentem Sync.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="fuer-wen" class="section section-alt" aria-labelledby="audience-title">
+      <div class="container two-col">
+        <div>
+          <p class="kicker">FÜR WEN</p>
+          <h2 id="audience-title">Gemacht für Angler, die mehr wollen als ein Foto.</h2>
+          <p>Hooked entsteht aus echter Praxis. Egal ob du an Hecht, Zander, Karpfen, Forelle oder Friedfisch sitzt –
+            du dokumentierst, vergleichst, lernst. Und du merkst nach ein paar Wochen: deine Entscheidungen am Wasser werden besser.</p>
+          <ul class="bullets">
+            <li>Spinnfischer, die Köder &amp; Tageszeit datenbasiert wählen wollen</li>
+            <li>Karpfenangler, die Sessions, Futter und Wetter zusammenbringen</li>
+            <li>Friedfischangler, die Spots langfristig auswerten</li>
+            <li>Vereins-Crews, die Trips gemeinsam planen</li>
+          </ul>
+        </div>
+        <div class="quote">
+          <blockquote>
+            <p>„Endlich eine App, die nicht nur Bilder sammelt, sondern <em>versteht</em>, was meine Daten bedeuten."</p>
+            <footer>– aus der internen Beta</footer>
+          </blockquote>
+        </div>
+      </div>
+    </section>
+
+    <section id="status" class="section" aria-labelledby="status-title">
+      <div class="container">
+        <header class="section-head">
+          <p class="kicker">ENTWICKLUNGSSTAND</p>
+          <h2 id="status-title">Wo steht Hooked gerade?</h2>
+          <p class="subline">Transparent statt Marketing-Versprechen.</p>
+        </header>
+        <ol class="timeline" role="list">
+          <li class="done"><strong>Kern-App</strong><span>Catches, Spots, Trips, Karte, Heatmap, Wetter, Lexikon, Missionen, Köderlevel.</span></li>
+          <li class="done"><strong>Cloud-Sync &amp; Trip-Sharing</strong><span>Mit Owner/Member-Logik, sauberer Account-Löschung und Apple Sign-In.</span></li>
+          <li class="active"><strong>Beta &amp; Feinschliff</strong><span>Tests, Crash-Reporting, Performance, finale Texte und Screenshots.</span></li>
+          <li><strong>Store-Submission</strong><span>App Store &amp; Google Play – Phase aktiv in Vorbereitung.</span></li>
+          <li><strong>Public Launch</strong><span>Sobald alle Reviews durch sind. Bleib für die Benachrichtigung dran.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="kontakt" class="section section-alt" aria-labelledby="contact-title">
+      <div class="container narrow">
+        <p class="kicker">KONTAKT</p>
+        <h2 id="contact-title">Beim Launch dabei sein</h2>
+        <p>Hooked startet in Kürze. Schreib uns – du erfährst es als Erste:r, wenn die App im Store ist.</p>
+        <p>
+          <a class="btn btn-primary" href="mailto:hello@hooked-fangtagebuch.app?subject=Beim%20Hooked-Launch%20dabei%20sein">
+            hello@hooked-fangtagebuch.app
+          </a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-row">
+      <p>© <span id="year"></span> Hooked · Fangtagebuch in Entwicklung.</p>
+      <nav aria-label="Rechtliche Links">
+        <a href="/impressum.html">Impressum</a>
+        <a href="/datenschutz.html">Datenschutz</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

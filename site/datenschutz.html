@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#06090F" />
+  <title>Datenschutz – Hooked Fangtagebuch</title>
+  <meta name="description" content="Datenschutzerklärung der Hooked Fangtagebuch-App und Website." />
+  <meta name="robots" content="noindex,follow" />
+  <link rel="canonical" href="https://hooked-fangtagebuch.app/datenschutz.html" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="brand" href="/" aria-label="Hooked Startseite">
+        <span class="brand-text">HOOKED</span>
+      </a>
+      <nav class="nav" aria-label="Hauptnavigation">
+        <a href="/#features">Features</a>
+        <a href="/#status">Status</a>
+        <a href="/#kontakt">Kontakt</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="container narrow">
+      <p class="kicker">RECHTLICHES</p>
+      <h1>Datenschutzerklärung</h1>
+      <p class="subline">Stand: April 2026 · Vorläufige Fassung während der Entwicklungsphase.</p>
+
+      <h2>1. Verantwortlicher</h2>
+      <p>Die Hooked App und diese Website werden während der Entwicklungsphase betrieben durch den Eigentümer der Domain <strong>hooked-fangtagebuch.app</strong>. Konkrete Kontaktdaten siehe <a href="/impressum.html">Impressum</a>.</p>
+
+      <h2>2. Welche Daten verarbeitet werden</h2>
+      <p>Auf dieser Website (statisches Hosting via Firebase Hosting) werden keine Cookies gesetzt und kein Tracking durchgeführt. Es findet keine Profilbildung statt. Beim Aufruf werden vom Hosting-Provider technisch notwendige Server-Logs (IP-Adresse, Zeitstempel, User-Agent) zur Auslieferung und Sicherheit kurzzeitig verarbeitet.</p>
+      <p>Innerhalb der mobilen App werden – ausschließlich nach deiner aktiven Anmeldung – Account-Stammdaten (E-Mail, Anzeigename), deine selbst eingegebenen Inhalte (Fänge, Spots, Trips, Notizen, Bilder) sowie optionale Standortdaten verarbeitet, um dir die Funktionalität bereitzustellen. Eine ausführliche In-App-Datenschutzerklärung liegt der Veröffentlichung im App Store und Google Play bei.</p>
+
+      <h2>3. Drittanbieter</h2>
+      <ul>
+        <li><strong>Firebase Hosting / Firestore / Authentication</strong> (Google Ireland Ltd.) – Bereitstellung der Website und der App-Cloud-Funktionen.</li>
+        <li><strong>Google Sign-In / Sign in with Apple</strong> – Optionale Anmeldeverfahren in der App.</li>
+        <li><strong>Google Fonts</strong> – Schriftarten werden vom Google CDN nachgeladen.</li>
+      </ul>
+
+      <h2>4. Deine Rechte</h2>
+      <p>Du hast jederzeit Anspruch auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit sowie das Recht, der Verarbeitung zu widersprechen. In der App existiert ein integrierter Konto-Lösch-Button, der deinen Account und alle zugehörigen Cloud-Daten entfernt.</p>
+
+      <h2>5. Kontakt</h2>
+      <p>Für Datenschutzanfragen erreichst du uns unter <a href="mailto:hello@hooked-fangtagebuch.app">hello@hooked-fangtagebuch.app</a>.</p>
+
+      <p class="meta">Hinweis: Diese Erklärung wird vor dem öffentlichen Launch durch eine vollständige, juristisch geprüfte Fassung ersetzt.</p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-row">
+      <p>© <span id="year"></span> Hooked · Fangtagebuch in Entwicklung.</p>
+      <nav><a href="/impressum.html">Impressum</a><a href="/datenschutz.html">Datenschutz</a></nav>
+    </div>
+  </footer>
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>

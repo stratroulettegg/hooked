@@ -1,0 +1,87 @@
+---
+// Phone-Mockup im App-Stil mit echten App-Inhalten
+---
+<div class="relative mx-auto w-full max-w-[340px] float-slow">
+  <!-- Glow -->
+  <div
+    aria-hidden="true"
+    class="pointer-events-none absolute -inset-10 -z-10 rounded-[60px] blur-3xl"
+    style="background: radial-gradient(closest-side, rgb(0 212 170 / 0.35), transparent 70%);"
+  ></div>
+
+  <!-- Phone frame -->
+  <div class="relative aspect-[9/19] rounded-[42px] border border-[var(--color-border-soft)] bg-gradient-to-b from-[#0d1525] to-[#060911] p-[14px] shadow-[var(--shadow-card)]">
+    <!-- Notch -->
+    <div class="absolute left-1/2 top-2 z-10 h-5 w-24 -translate-x-1/2 rounded-full bg-black/60"></div>
+
+    <!-- Screen -->
+    <div class="flex h-full flex-col gap-2.5 rounded-[30px] border border-[var(--color-border-soft)]/70 bg-[var(--color-bg)] px-3.5 pb-3.5 pt-7 overflow-hidden">
+
+      <!-- Status-Bar replacement: HOOKED header -->
+      <div class="flex items-center justify-between font-display text-[12px] font-bold tracking-[0.3em] text-[var(--color-text-secondary)]">
+        <span>9:41</span>
+        <span class="text-[var(--color-brand)]">HOOKED</span>
+        <span aria-hidden="true">≡</span>
+      </div>
+
+      <!-- Catch card 1 -->
+      <div class="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-3">
+        <div class="flex items-center justify-between">
+          <span class="rounded-full border border-[#FF6B35]/40 bg-[#FF6B35]/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-strike)]">Hecht</span>
+          <span class="font-display text-lg font-bold">68 cm</span>
+        </div>
+        <p class="mt-1.5 text-[11px] text-[var(--color-text-muted)]">Plauer See · 06:42 · 12 °C</p>
+        <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+          <div class="h-full w-[78%] rounded-full bg-gradient-to-r from-[var(--color-brand-dark)] to-[var(--color-brand)]"></div>
+        </div>
+      </div>
+
+      <!-- Catch card 2 -->
+      <div class="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-3">
+        <div class="flex items-center justify-between">
+          <span class="rounded-full border border-[var(--color-brand)]/35 bg-[var(--color-brand)]/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Zander</span>
+          <span class="font-display text-lg font-bold">54 cm</span>
+        </div>
+        <p class="mt-1.5 text-[11px] text-[var(--color-text-muted)]">Hafenkante · 19:08 · 14 °C</p>
+        <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+          <div class="h-full w-[62%] rounded-full bg-gradient-to-r from-[var(--color-brand-dark)] to-[var(--color-brand)]"></div>
+        </div>
+      </div>
+
+      <!-- Heatmap card -->
+      <div class="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-3">
+        <div class="flex items-center justify-between">
+          <span class="rounded-full border border-[#FFB800]/40 bg-[#FFB800]/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-score-mid)]">Spot-Score 92</span>
+          <span class="text-[10px] text-[var(--color-text-muted)]">Top 1</span>
+        </div>
+        <div class="mt-2.5 grid grid-cols-6 gap-1">
+          {[
+            'h0','h1','h2','h3','h2','h1',
+            'h1','h2','h3','h4','h3','h2',
+            'h2','h3','h4','h4','h3','h1',
+            'h0','h2','h3','h2','h1','h0',
+          ].map((c) => (
+            <span class={`aspect-square rounded heat-${c}`}></span>
+          ))}
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="mt-auto flex justify-between border-t border-[var(--color-border-soft)] pt-2.5 text-[10px] text-[var(--color-text-muted)]">
+        <span class="font-bold text-[var(--color-brand)]">● Catches</span>
+        <span>Spots</span>
+        <span>Trips</span>
+        <span>Karte</span>
+        <span>Mehr</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .heat-h0 { background: rgb(0 212 170 / 0.06); }
+  .heat-h1 { background: rgb(0 212 170 / 0.20); }
+  .heat-h2 { background: rgb(255 184 0 / 0.30); }
+  .heat-h3 { background: rgb(255 107 53 / 0.45); }
+  .heat-h4 { background: rgb(0 212 170 / 0.85); box-shadow: 0 0 12px rgb(0 212 170 / 0.6); }
+</style>
