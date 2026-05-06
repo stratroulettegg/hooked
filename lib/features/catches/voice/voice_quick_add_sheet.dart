@@ -52,6 +52,12 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
   Timer? _hintTimer;
   bool _showHint = false;
 
+  // Android-Workaround: der System-Recognizer stoppt nach ~2–5 s Stille,
+  // unabhängig von pauseFor. Wir starten automatisch neu und akkumulieren
+  // den Transcript segmentweise.
+  bool _userStopped = false;
+  String _accumulatedTranscript = '';
+
   // Silent GPS-Hintergrund-Erfassung während des Sprechens. Kein Permission-
   // Prompt — nur nutzen, wenn die App bereits autorisiert ist.
   Future<Position?>? _locationFuture;
@@ -74,6 +80,8 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
   }
 
   Future<void> _startListening() async {
+    _userStopped = false;
+    _accumulatedTranscript = '';
     setState(() {
       _transcript = '';
       _parsed = null;
@@ -84,7 +92,6 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
     _hintTimer?.cancel();
     _hintTimer = Timer(const Duration(seconds: 8), () {
       if (!mounted) return;
-      // Nur einblenden, wenn nach 8 s noch nichts Sinnvolles erkannt wurde.
       if (_stage == _Stage.listening && _transcript.trim().length < 4) {
         setState(() => _showHint = true);
       }
@@ -98,15 +105,26 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
 
     final available = await _speech.initialize(
       onStatus: (status) {
-        // status: 'listening', 'notListening', 'done'
-        if (status == 'done' || status == 'notListening') {
-          if (_stage == _Stage.listening && mounted) {
+        if ((status == 'done' || status == 'notListening') &&
+            _stage == _Stage.listening &&
+            mounted) {
+          if (_userStopped) {
             _onListeningEnded();
+          } else {
+            // Android hat die Session vorzeitig beendet → neu starten und
+            // bisherigen Transcript akkumulieren.
+            _restartListening();
           }
         }
       },
       onError: (err) {
+        // 'error_no_match' und 'error_speech_timeout' sind auf Android normal
+        // bei kurzen Pausen — kein echter Fehler, wird über Restart behandelt.
         if (!mounted) return;
+        final ignorable = err.errorMsg == 'error_no_match' ||
+            err.errorMsg == 'error_speech_timeout' ||
+            err.errorMsg == 'error_recognizer_busy';
+        if (ignorable) return;
         setState(() {
           _stage = _Stage.error;
           _errorMessage = err.errorMsg;
@@ -125,46 +143,55 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
     }
 
     setState(() => _stage = _Stage.listening);
+    await _doListen();
 
+    // Sicherheits-Auto-Stop nach 60 s.
+    _autoStopTimer?.cancel();
+    _autoStopTimer = Timer(const Duration(seconds: 60), () {
+      if (_stage == _Stage.listening) _stopListening();
+    });
+  }
+
+  Future<void> _doListen() async {
     await _speech.listen(
       localeId: 'de_DE',
-      // Android beendet die Aufnahme sonst bereits nach ~2 s Stille — beim
-      // Diktieren von Längen/Gewichten ("Hecht, 73 cm, 1 Komma 3 Kilo")
-      // entstehen aber natürliche kurze Pausen zwischen den Werten.
-      // 8 s Pausen-Toleranz + 30 s Gesamtdauer geben genug Luft.
-      pauseFor: const Duration(seconds: 8),
+      pauseFor: const Duration(seconds: 5),
       listenFor: const Duration(seconds: 30),
       listenOptions: stt.SpeechListenOptions(
         partialResults: true,
-        // Auf Android wirft der System-Recognizer bei kleinen Pausen oder
-        // unklaren Tokens regelmäßig 'error_no_match' / 'error_speech_timeout'.
-        // Mit cancelOnError = true wird dann die ganze Session abgebrochen,
-        // obwohl der User noch spricht. Wir lassen das Plugin selbst
-        // entscheiden und behandeln nur permanente Fehler über onError.
         cancelOnError: false,
         listenMode: stt.ListenMode.dictation,
       ),
       onResult: (SpeechRecognitionResult r) {
         if (!mounted) return;
-        setState(() => _transcript = r.recognizedWords);
+        final combined = _accumulatedTranscript.isEmpty
+            ? r.recognizedWords
+            : '$_accumulatedTranscript ${r.recognizedWords}';
+        setState(() => _transcript = combined.trim());
       },
       onSoundLevelChange: (l) {
         if (!mounted) return;
-        // Werte sind grob -2..10 (dB-artig). Auf 0..1 normieren.
         final norm = ((l + 2) / 12).clamp(0.0, 1.0);
         setState(() => _level = norm);
       },
     );
+  }
 
-    // Sicherheits-Auto-Stop nach 32 s (etwas länger als listenFor, falls
-    // das Plugin den Timer nicht selbst feuert).
-    _autoStopTimer?.cancel();
-    _autoStopTimer = Timer(const Duration(seconds: 32), () {
-      if (_speech.isListening) _stopListening();
-    });
+  Future<void> _restartListening() async {
+    if (!mounted || _userStopped || _stage != _Stage.listening) return;
+    // Aktuellen Partial-Transcript sichern, bevor neu gestartet wird.
+    final current = _transcript.trim();
+    if (current.isNotEmpty) {
+      _accumulatedTranscript = current;
+    }
+    // Kurze Pause, damit Android den Recognizer freigeben kann.
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted || _userStopped || _stage != _Stage.listening) return;
+    await _doListen();
   }
 
   Future<void> _stopListening() async {
+    _userStopped = true;
     _autoStopTimer?.cancel();
     await _speech.stop();
     _onListeningEnded();
