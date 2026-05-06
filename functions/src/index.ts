@@ -7,7 +7,6 @@ import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import vision from "@google-cloud/vision";
-import { VertexAI } from "@google-cloud/vertexai";
 
 initializeApp();
 
@@ -543,16 +542,54 @@ Strenge Regeln:
 - Wenn kein Fisch zu sehen ist → "unbekannt"
 - Niemals Erklärungen, niemals Zusatztext, niemals Markdown.`;
 
-let vertexClient: VertexAI | null = null;
-function getVertex(): VertexAI {
-  if (!vertexClient) {
-    vertexClient = new VertexAI({
-      // project wird aus Firebase-Default genommen
-      project: process.env.GCLOUD_PROJECT ?? process.env.GCP_PROJECT ?? "",
-      location: GEMINI_REGION,
-    });
+/** Holt einen kurzlebigen Access-Token vom GCP-Metadata-Server.
+ *  Funktioniert zuverlässig in Cloud Run / Gen-2-Functions ohne extra Auth-Config.
+ */
+async function getGcpAccessToken(): Promise<string> {
+  const res = await fetch(
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+    { headers: { "Metadata-Flavor": "Google" } },
+  );
+  if (!res.ok) throw new Error(`Metadata token fetch failed: ${res.status}`);
+  const json = await res.json() as { access_token: string };
+  return json.access_token;
+}
+
+/** Ruft die Vertex AI generateContent-API per fetch auf (kein SDK). */
+async function callVertexGemini(imageBase64: string): Promise<string> {
+  const project = process.env.GCLOUD_PROJECT ?? "";
+  const endpoint =
+    `https://${GEMINI_REGION}-aiplatform.googleapis.com/v1/projects/${project}` +
+    `/locations/${GEMINI_REGION}/publishers/google/models/${GEMINI_MODEL}:generateContent`;
+  const token = await getGcpAccessToken();
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
+          { text: GEMINI_PROMPT },
+        ],
+      }],
+      generationConfig: { temperature: 0, maxOutputTokens: 16 },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => `HTTP ${res.status}`);
+    throw new Error(`Vertex AI ${res.status}: ${errText.slice(0, 400)}`);
   }
-  return vertexClient;
+
+  const data = await res.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
 async function tryReserveGeminiCall(): Promise<boolean> {
@@ -598,48 +635,20 @@ export const suggestFishSpecies = onCall(
     }
 
     try {
-      const model = getVertex().getGenerativeModel({
-        model: GEMINI_MODEL,
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 16,
-        },
-      });
+      const rawText = await callVertexGemini(imageBase64);
+      const raw = rawText.trim().toLowerCase().replace(/[^a-zäöü]/g, "");
 
-      const result = await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
-              { text: GEMINI_PROMPT },
-            ],
-          },
-        ],
-      });
-
-      const raw = (
-        result.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-      )
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-zäöü]/g, "");
-
-      const species: SuggestedSpecies = (SUPPORTED_SPECIES as readonly string[]).includes(
-        raw,
-      )
+      const species: SuggestedSpecies = (SUPPORTED_SPECIES as readonly string[]).includes(raw)
         ? (raw as SuggestedSpecies)
         : "unbekannt";
 
-      logger.info("Gemini species suggestion", {
-        uid: request.auth.uid,
-        raw,
-        species,
-      });
+      logger.info("Gemini species suggestion", { uid: request.auth.uid, raw, species });
       return { species, capped: false };
     } catch (e) {
       logger.error("Gemini call failed", { error: String(e) });
-      throw new HttpsError("internal", `Bildanalyse fehlgeschlagen: ${String(e)}`);
+      // "unavailable" schickt den Message-Text zum Client durch
+      // ("internal" wird von Firebase aus Sicherheitsgründen maskiert).
+      throw new HttpsError("unavailable", `Bildanalyse: ${String(e)}`);
     }
   },
 );

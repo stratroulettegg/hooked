@@ -100,6 +100,7 @@ class _AiQuickAddSheetState extends State<AiQuickAddSheet> {
           'invalid-argument' => 'Bild konnte nicht verarbeitet werden.',
           'not-found' => 'KI-Funktion nicht erreichbar.',
           'resource-exhausted' => 'Tages-Limit erreicht. Morgen wieder!',
+          'unavailable' => e.message ?? 'KI-Dienst nicht verfügbar.',
           _ => e.message ?? e.toString(),
         };
       } else {
