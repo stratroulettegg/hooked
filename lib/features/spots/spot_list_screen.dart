@@ -922,16 +922,16 @@ class _SpotFilterBar extends StatelessWidget {
         sort != _SpotSort.newest;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
           _SpotFilterChip(
             icon: Icons.terrain,
             label: structure?.displayName ?? 'Struktur',
@@ -963,6 +963,7 @@ class _SpotFilterBar extends StatelessWidget {
                 ? () => onChanged(null, activity, seasonTipOnly, sort)
                 : null,
           ),
+          const SizedBox(width: 8),
           _SpotFilterChip(
             icon: activity.icon,
             label: activity == _SpotActivity.all
@@ -989,6 +990,7 @@ class _SpotFilterBar extends StatelessWidget {
                     structure, _SpotActivity.all, seasonTipOnly, sort)
                 : null,
           ),
+          const SizedBox(width: 8),
           _SpotFilterChip(
             icon: Icons.eco_outlined,
             label: 'Saison-Tipp',
@@ -997,6 +999,7 @@ class _SpotFilterBar extends StatelessWidget {
             onTap: () =>
                 onChanged(structure, activity, !seasonTipOnly, sort),
           ),
+          const SizedBox(width: 8),
           _SpotFilterChip(
             icon: Icons.sort,
             label: sort.shortLabel,
@@ -1021,7 +1024,8 @@ class _SpotFilterBar extends StatelessWidget {
                     structure, activity, seasonTipOnly, _SpotSort.newest)
                 : null,
           ),
-          if (hasAny)
+          if (hasAny) ...[
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: () => onChanged(
                   null, _SpotActivity.all, false, _SpotSort.newest),
@@ -1033,7 +1037,9 @@ class _SpotFilterBar extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-              ],
+          ],
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -1044,6 +1050,7 @@ class _SpotFilterBar extends StatelessWidget {
             isToggle: true,
             onTap: onToggleColumns,
           ),
+          const SizedBox(width: 16),
         ],
       ),
     );
@@ -1069,11 +1076,10 @@ class _SpotFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    return IntrinsicWidth(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: AnimatedContainer(
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -1119,7 +1125,6 @@ class _SpotFilterChip extends StatelessWidget {
             ],
           ],
         ),
-      ),
       ),
     );
   }

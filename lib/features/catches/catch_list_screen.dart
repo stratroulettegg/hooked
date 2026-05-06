@@ -711,16 +711,16 @@ class _FilterBar extends StatelessWidget {
         sort != _CatchSort.dateDesc;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
           _FilterChipDropdown<FishSpecies?>(
             icon: Icons.set_meal,
             label: species?.displayName ?? 'Fischart',
@@ -744,6 +744,7 @@ class _FilterBar extends StatelessWidget {
                 ? () => onChanged(null, lure, onlyPB, sort)
                 : null,
           ),
+          const SizedBox(width: 8),
           _FilterChipDropdown(
             icon: Icons.phishing,
             label: lure ?? 'Köder',
@@ -773,6 +774,7 @@ class _FilterBar extends StatelessWidget {
                 ? () => onChanged(species, null, onlyPB, sort)
                 : null,
           ),
+          const SizedBox(width: 8),
           _FilterChipDropdown(
             icon: Icons.emoji_events,
             label: 'PB',
@@ -780,6 +782,7 @@ class _FilterBar extends StatelessWidget {
             isToggle: true,
             onTap: () => onChanged(species, lure, !onlyPB, sort),
           ),
+          const SizedBox(width: 8),
           _FilterChipDropdown(
             icon: Icons.sort,
             label: sort.shortLabel,
@@ -803,7 +806,8 @@ class _FilterBar extends StatelessWidget {
                 ? () => onChanged(species, lure, onlyPB, _CatchSort.dateDesc)
                 : null,
           ),
-          if (hasAny)
+          if (hasAny) ...[
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: () =>
                   onChanged(null, null, false, _CatchSort.dateDesc),
@@ -815,7 +819,9 @@ class _FilterBar extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-              ],
+          ],
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -826,6 +832,7 @@ class _FilterBar extends StatelessWidget {
             isToggle: true,
             onTap: onToggleColumns,
           ),
+          const SizedBox(width: 16),
         ],
       ),
     );
