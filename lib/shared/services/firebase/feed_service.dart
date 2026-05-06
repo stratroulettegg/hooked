@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -7,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../models/catch_entry.dart';
 import '../../models/fishing_spot.dart';
+import '../app_paths.dart';
 import 'firebase_bootstrap.dart';
 
 /// Repräsentiert einen geteilten Fang im Community-Feed.
@@ -106,15 +105,19 @@ class FeedService {
     if (user == null) return;
 
     String? photoUrl;
-    final localPath = entry.photoPath;
-    if (localPath != null && localPath.isNotEmpty) {
-      final file = File(localPath);
-      if (await file.exists()) {
+    final file = AppPaths.photoFile(entry.photoPath);
+    if (file != null) {
+      try {
         final ref = FirebaseStorage.instance.ref().child(
           'feedPhotos/${user.uid}/${entry.id}.jpg',
         );
         await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
         photoUrl = await ref.getDownloadURL();
+      } catch (e) {
+        // Upload-Fehler nicht den ganzen Publish kippen lassen.
+        // photoUrl bleibt null; Eintrag wird ohne Bild veröffentlicht.
+        // Logging übernimmt der Aufrufer.
+        rethrow;
       }
     }
 
