@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
+import '../../shared/services/feed_seen_service.dart';
 import '../../shared/services/firebase/feed_service.dart';
 import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/widgets/apex_app_bar.dart';
@@ -1092,6 +1093,20 @@ class _CatchCard extends ConsumerWidget {
         : null;
     final hasPhoto = AppPaths.photoFile(entry.photoPath) != null;
 
+    // Live-Counter aus dem eigenen Feed-Stream + Seen-State.
+    final myPosts =
+        ref.watch(myFeedPostsProvider).valueOrNull ?? const {};
+    final FeedPost? post = entry.isShared ? myPosts[entry.id] : null;
+    final seen = ref.watch(feedSeenProvider)[entry.id] ??
+        const FeedSeenCounts();
+    final newLikes = post == null
+        ? 0
+        : (post.likeCount - seen.likes).clamp(0, 9999);
+    final newComments = post == null
+        ? 0
+        : (post.commentCount - seen.comments).clamp(0, 9999);
+    final hasNews = newLikes > 0 || newComments > 0;
+
     // Rechte Card-Ecken werden während des Swipes eckig — sonst stehen
     // sie vor dem roten Lösch-Feld und erzeugen Eck-Lücken.
     final swiping = SwipeAffordance.of(context);
@@ -1102,7 +1117,16 @@ class _CatchCard extends ConsumerWidget {
           )
         : BorderRadius.circular(18);
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        // Beim Öffnen den aktuellen Stand als gesehen markieren — danach
+        // verschwindet der Neu-Indikator auf der Karte.
+        if (post != null) {
+          ref
+              .read(feedSeenProvider.notifier)
+              .markSeen(post.id, post.likeCount, post.commentCount);
+        }
+        onTap();
+      },
       child: Container(
         decoration: BoxDecoration(
           color: c.surface,
@@ -1199,8 +1223,20 @@ class _CatchCard extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    // Top-Left: Hinweis bei fehlendem Foto
-                    if (!hasPhoto)
+                    // Top-Left: Geteilt-Pill mit Live-Counter, sonst
+                    // Hinweis bei fehlendem Foto.
+                    if (entry.isShared)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: _SharedBadge(
+                          post: post,
+                          newLikes: newLikes,
+                          newComments: newComments,
+                          hasNews: hasNews,
+                        ),
+                      )
+                    else if (!hasPhoto)
                       Positioned(
                         top: 10,
                         left: 10,
@@ -2178,22 +2214,22 @@ class _FeedActionButtonState extends State<_FeedActionButton>
             ),
           ),
         ),
-        if (widget.count > 0) ...[
-          const SizedBox(height: 5),
-          Text(
-            _fmt(widget.count),
-            style: const TextStyle(
-              fontFamily: 'Rajdhani',
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-              color: Colors.white,
-              letterSpacing: 0.3,
-              shadows: [
-                Shadow(color: Colors.black87, blurRadius: 6),
-              ],
-            ),
+        // Counter immer anzeigen (auch bei 0) – verhindert Layout-Shift,
+        // wenn der erste Like/Kommentar dazukommt.
+        const SizedBox(height: 5),
+        Text(
+          _fmt(widget.count),
+          style: const TextStyle(
+            fontFamily: 'Rajdhani',
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
+            color: Colors.white,
+            letterSpacing: 0.3,
+            shadows: [
+              Shadow(color: Colors.black87, blurRadius: 6),
+            ],
           ),
-        ],
+        ),
       ],
     );
   }
@@ -2220,12 +2256,24 @@ class _FeedCommentsSheet extends ConsumerStatefulWidget {
 
 class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
   final _ctrl = TextEditingController();
+  final _focus = FocusNode();
   bool _sending = false;
+  String? _replyToId;
+  String? _replyToName;
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _focus.dispose();
     super.dispose();
+  }
+
+  void _setReply(String? id, String? name) {
+    setState(() {
+      _replyToId = id;
+      _replyToName = name;
+    });
+    if (id != null) _focus.requestFocus();
   }
 
   Future<void> _send() async {
@@ -2235,8 +2283,9 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
     try {
       await ref
           .read(feedServiceProvider)
-          .addComment(widget.postId, text);
+          .addComment(widget.postId, text, parentId: _replyToId);
       _ctrl.clear();
+      _setReply(null, null);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2254,6 +2303,110 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
     if (d.inHours < 24) return '${d.inHours} Std.';
     if (d.inDays < 7) return '${d.inDays} Tg.';
     return AppDateFormats.dayMonthYearShort.format(when);
+  }
+
+  /// Einzelner Kommentar (Top-Level oder Reply).
+  /// `indent: 1` macht den Avatar etwas kleiner für Replies.
+  Widget _commentTile(
+    ApexColors c,
+    dynamic me,
+    FeedComment cm, {
+    int indent = 0,
+  }) {
+    final isMine = me?.uid == cm.userId;
+    final avatarRadius = indent == 0 ? 16.0 : 13.0;
+    final iconSize = indent == 0 ? 18.0 : 14.0;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: avatarRadius,
+          backgroundColor: c.border,
+          backgroundImage:
+              (cm.userPhotoUrl != null && cm.userPhotoUrl!.isNotEmpty)
+                  ? NetworkImage(cm.userPhotoUrl!)
+                  : null,
+          child: (cm.userPhotoUrl == null || cm.userPhotoUrl!.isEmpty)
+              ? Icon(Icons.person, size: iconSize, color: c.textMuted)
+              : null,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      cm.userName?.isNotEmpty == true
+                          ? cm.userName!
+                          : 'Angler:in',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _relTime(cm.createdAt),
+                    style: TextStyle(
+                      color: c.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                cm.text,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 14,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Antworten-Action (nur Top-Level — Threads bleiben flach).
+              if (indent == 0)
+                InkWell(
+                  onTap: () => _setReply(
+                    cm.id,
+                    cm.userName?.isNotEmpty == true
+                        ? cm.userName!
+                        : 'Angler:in',
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 2),
+                    child: Text(
+                      'Antworten',
+                      style: TextStyle(
+                        color: c.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (isMine)
+          IconButton(
+            icon: Icon(Icons.delete_outline,
+                size: 18, color: c.textMuted),
+            onPressed: () => ref
+                .read(feedServiceProvider)
+                .deleteComment(widget.postId, cm.id),
+          ),
+      ],
+    );
   }
 
   @override
@@ -2358,87 +2511,44 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                           ),
                         );
                       }
-                      return ListView.separated(
+                      // Top-Level + Replies (parentId) aufteilen.
+                      final tops = <FeedComment>[];
+                      final replies = <String, List<FeedComment>>{};
+                      for (final cm in list) {
+                        if (cm.parentId == null) {
+                          tops.add(cm);
+                        } else {
+                          replies
+                              .putIfAbsent(cm.parentId!, () => [])
+                              .add(cm);
+                        }
+                      }
+                      return ListView.builder(
                         controller: scrollCtrl,
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                        itemCount: list.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 12),
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        itemCount: tops.length,
                         itemBuilder: (context, i) {
-                          final cm = list[i];
-                          final isMine = me?.uid == cm.userId;
-                          return Row(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: c.border,
-                                backgroundImage: (cm.userPhotoUrl !=
-                                            null &&
-                                        cm.userPhotoUrl!.isNotEmpty)
-                                    ? NetworkImage(cm.userPhotoUrl!)
-                                    : null,
-                                child: (cm.userPhotoUrl == null ||
-                                        cm.userPhotoUrl!.isEmpty)
-                                    ? Icon(Icons.person,
-                                        size: 18, color: c.textMuted)
-                                    : null,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            cm.userName?.isNotEmpty == true
-                                                ? cm.userName!
-                                                : 'Angler:in',
-                                            overflow:
-                                                TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: c.textPrimary,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          _relTime(cm.createdAt),
-                                          style: TextStyle(
-                                            color: c.textMuted,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      cm.text,
-                                      style: TextStyle(
-                                        color: c.textPrimary,
-                                        fontSize: 14,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (isMine)
-                                IconButton(
-                                  icon: Icon(Icons.delete_outline,
-                                      size: 18, color: c.textMuted),
-                                  onPressed: () => ref
-                                      .read(feedServiceProvider)
-                                      .deleteComment(
-                                          widget.postId, cm.id),
-                                ),
-                            ],
+                          final top = tops[i];
+                          final children =
+                              replies[top.id] ?? const <FeedComment>[];
+                          return Padding(
+                            padding: EdgeInsets.only(
+                                top: i == 0 ? 0 : 12),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                _commentTile(c, me, top, indent: 0),
+                                for (final r in children)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                        top: 10, left: 36),
+                                    child: _commentTile(c, me, r,
+                                        indent: 1),
+                                  ),
+                              ],
+                            ),
                           );
                         },
                       );
@@ -2455,59 +2565,120 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                   ),
                   padding: EdgeInsets.fromLTRB(
                       14, 10, 10, 10 + mediaInsets),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: Container(
+                      // Reply-Indikator: zeigt, an wen gerade geantwortet wird.
+                      if (_replyToId != null) ...[
+                        Container(
+                          margin:
+                              const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.fromLTRB(
+                              12, 6, 6, 6),
                           decoration: BoxDecoration(
-                            color: c.surface,
-                            borderRadius: BorderRadius.circular(24),
+                            color: ApexColors.primary.withAlpha(30),
+                            borderRadius:
+                                BorderRadius.circular(999),
                             border: Border.all(
-                                color: c.border.withAlpha(160)),
+                              color: ApexColors.primary.withAlpha(80),
+                              width: 0.7,
+                            ),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          child: TextField(
-                            controller: _ctrl,
-                            enabled: me != null && !_sending,
-                            minLines: 1,
-                            maxLines: 4,
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (_) => _send(),
-                            style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 14,
-                            ),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: me == null
-                                  ? 'Anmelden, um zu kommentieren'
-                                  : 'Kommentar schreiben…',
-                              hintStyle:
-                                  TextStyle(color: c.textMuted),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(
-                                      vertical: 10),
-                            ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.reply,
+                                  size: 14,
+                                  color: ApexColors.primary),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Antwort an ${_replyToName ?? ''}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: c.textPrimary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                              InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => _setReply(null, null),
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.all(4),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: c.textMuted,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Material(
-                        color: ApexColors.primary,
-                        shape: const CircleBorder(),
-                        elevation: 0,
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: me == null || _sending ? null : _send,
-                          child: SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: Center(
-                              child: _sending
-                                  ? const SizedBox(
+                      ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: c.surface,
+                                borderRadius:
+                                    BorderRadius.circular(24),
+                                border: Border.all(
+                                    color: c.border.withAlpha(160)),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 4),
+                              child: TextField(
+                                controller: _ctrl,
+                                focusNode: _focus,
+                                enabled: me != null && !_sending,
+                                minLines: 1,
+                                maxLines: 4,
+                                textInputAction:
+                                    TextInputAction.send,
+                                onSubmitted: (_) => _send(),
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 14,
+                                ),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  border: InputBorder.none,
+                                  hintText: me == null
+                                      ? 'Anmelden, um zu kommentieren'
+                                      : _replyToId != null
+                                          ? 'Antworten…'
+                                          : 'Kommentar schreiben…',
+                                  hintStyle: TextStyle(
+                                      color: c.textMuted),
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          vertical: 10),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Material(
+                            color: ApexColors.primary,
+                            shape: const CircleBorder(),
+                            elevation: 0,
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: me == null || _sending
+                                  ? null
+                                  : _send,
+                              child: SizedBox(
+                                width: 40,
+                                height: 40,
+                                child: Center(
+                                  child: _sending
+                                      ? const SizedBox(
                                       width: 18,
                                       height: 18,
                                       child:
@@ -2527,6 +2698,8 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                       ),
                     ],
                   ),
+                    ],
+                  ),
                 ),
               ],
               ),
@@ -2534,6 +2707,116 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Glas-Badge, das auf der "Meine Fänge"-Karte signalisiert, dass der Fang
+/// in der Community geteilt wurde — inkl. Live-Counter für Likes/Kommentare
+/// und einem roten Dot, wenn neue Reaktionen seit dem letzten Besuch da sind.
+class _SharedBadge extends StatelessWidget {
+  const _SharedBadge({
+    required this.post,
+    required this.newLikes,
+    required this.newComments,
+    required this.hasNews,
+  });
+
+  final FeedPost? post;
+  final int newLikes;
+  final int newComments;
+  final bool hasNews;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = post == null;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.black.withAlpha(95),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: hasNews
+                  ? ApexColors.scoreLow.withAlpha(180)
+                  : Colors.white.withAlpha(45),
+              width: 0.7,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                pending ? Icons.cloud_upload_outlined : Icons.public,
+                size: 13,
+                color: Colors.white.withAlpha(230),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                pending ? 'Wird geteilt…' : 'Geteilt',
+                style: const TextStyle(
+                  fontFamily: 'Rajdhani',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              if (post != null) ...[
+                const SizedBox(width: 8),
+                _badgeStat(
+                  Icons.favorite,
+                  post!.likeCount,
+                  highlighted: newLikes > 0,
+                ),
+                const SizedBox(width: 6),
+                _badgeStat(
+                  Icons.mode_comment,
+                  post!.commentCount,
+                  highlighted: newComments > 0,
+                ),
+                if (hasNews) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: ApexColors.scoreLow,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _badgeStat(IconData icon, int count, {bool highlighted = false}) {
+    final color =
+        highlighted ? ApexColors.scoreLow : Colors.white.withAlpha(230);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 11, color: color),
+        const SizedBox(width: 3),
+        Text(
+          '$count',
+          style: TextStyle(
+            fontFamily: 'Rajdhani',
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: color,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ],
     );
   }
 }

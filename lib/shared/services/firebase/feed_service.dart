@@ -74,7 +74,8 @@ class FeedPost {
   }
 }
 
-/// Ein Kommentar zu einem Feed-Post.
+/// Ein Kommentar zu einem Feed-Post. `parentId` ist gesetzt, wenn der
+/// Kommentar eine Antwort auf einen anderen Kommentar ist.
 class FeedComment {
   final String id;
   final String userId;
@@ -82,6 +83,7 @@ class FeedComment {
   final String? userPhotoUrl;
   final String text;
   final DateTime createdAt;
+  final String? parentId;
 
   const FeedComment({
     required this.id,
@@ -90,6 +92,7 @@ class FeedComment {
     this.userPhotoUrl,
     required this.text,
     required this.createdAt,
+    this.parentId,
   });
 
   factory FeedComment.fromMap(String id, Map<String, dynamic> map) {
@@ -101,6 +104,7 @@ class FeedComment {
       userPhotoUrl: map['userPhotoUrl'] as String?,
       text: map['text'] as String? ?? '',
       createdAt: ts is Timestamp ? ts.toDate() : DateTime.now(),
+      parentId: map['parentId'] as String?,
     );
   }
 }
@@ -273,7 +277,12 @@ class FeedService {
   }
 
   /// Fügt einen Kommentar hinzu und erhöht den Counter atomar.
-  Future<void> addComment(String postId, String text) async {
+  /// `parentId` markiert den Kommentar als Antwort auf einen anderen.
+  Future<void> addComment(
+    String postId,
+    String text, {
+    String? parentId,
+  }) async {
     if (!FirebaseBootstrap.isAvailable) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
@@ -289,6 +298,7 @@ class FeedService {
       'userPhotoUrl': user.photoURL,
       'text': trimmed,
       'createdAt': FieldValue.serverTimestamp(),
+      if (parentId != null) 'parentId': parentId,
     });
     batch.update(postRef, {
       'commentCount': FieldValue.increment(1),
@@ -315,6 +325,29 @@ class FeedService {
       // Best-effort: wenn Counter-Update scheitert, ist der Kommentar
       // dennoch gelöscht.
     }
+  }
+
+  /// Stream der eigenen Feed-Posts (alle, ohne Limit). Wird im Hintergrund
+  /// aktiv abonniert, damit "Meine Fänge" Live-Counter zeigt.
+  Stream<List<FeedPost>> watchMyFeed() {
+    if (!FirebaseBootstrap.isAvailable) {
+      return const Stream<List<FeedPost>>.empty();
+    }
+    return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+      if (user == null) {
+        return Stream<List<FeedPost>>.value(const []);
+      }
+      return _db
+          .collection('feed')
+          .where('userId', isEqualTo: user.uid)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map((d) => FeedPost.fromMap(d.id, d.data()))
+                .toList(),
+          )
+          .handleError((Object e, StackTrace st) {});
+    });
   }
 
   /// Stream der Kommentare zu einem Post (älteste zuerst).

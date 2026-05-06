@@ -108,6 +108,13 @@ final feedPostsProvider = StreamProvider<List<FeedPost>>((ref) {
   return _feedService.watchFeed();
 });
 
+/// Stream der eigenen Feed-Posts (alle, ohne Limit), als Map keyed by postId.
+final myFeedPostsProvider = StreamProvider<Map<String, FeedPost>>((ref) {
+  return _feedService.watchMyFeed().map(
+        (posts) => {for (final p in posts) p.id: p},
+      );
+});
+
 /// Stream der Kommentare zu einem Post.
 final feedCommentsProvider =
     StreamProvider.family<List<FeedComment>, String>((ref, postId) {
