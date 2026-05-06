@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/format/app_formats.dart';
@@ -99,6 +100,16 @@ class ApexApp extends ConsumerWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       routerConfig: appRouter,
+      // Die App ist nur auf Deutsch verfügbar — Material/Cupertino/Widgets-
+      // Localizations sorgen dafür, dass DatePicker, TimePicker, Tooltips,
+      // Wochentags-Kürzel etc. auf Deutsch erscheinen.
+      locale: const Locale('de'),
+      supportedLocales: const [Locale('de'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
       builder: (context, child) => PbCelebrationHost(
         child: RankCelebrationHost(child: child ?? const SizedBox.shrink()),
       ),

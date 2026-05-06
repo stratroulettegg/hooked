@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/format/app_formats.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/fishing_spot.dart';
 import '../../shared/services/app_providers.dart';
@@ -51,7 +52,7 @@ class _AddEditSpotScreenState extends ConsumerState<AddEditSpotScreen> {
     if (e != null) {
       _nameCtrl.text = e.name;
       _waterBodyCtrl.text = e.waterBodyName ?? '';
-      _depthCtrl.text = e.depthM?.toString() ?? '';
+      _depthCtrl.text = AppNum.text(e.depthM);
       _notesCtrl.text = e.notes ?? '';
       _lat = e.lat;
       _lng = e.lng;

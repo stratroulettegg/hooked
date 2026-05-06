@@ -521,14 +521,11 @@ class _EmptyState extends StatelessWidget {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-String _formatWeight(int g) {
-  if (g >= 1000) return '${(g / 1000).toStringAsFixed(2)} kg';
-  return '$g g';
-}
+String _formatWeight(int g) => AppNum.kg(g);
 
 String _formatLength(double cm) {
   if (cm == cm.roundToDouble()) return cm.toStringAsFixed(0);
-  return cm.toStringAsFixed(1);
+  return AppNum.fixed(cm, 1);
 }
 
 String _bestMetric(CatchEntry e) {

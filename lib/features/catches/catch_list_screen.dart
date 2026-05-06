@@ -399,7 +399,7 @@ class _MonthHeaderDelegate extends SliverPersistentHeaderDelegate {
     final monthLabel = _monthNamesDe[group.month - 1];
     final weight = group.totalWeightG;
     final weightLabel = weight >= 1000
-        ? '${(weight / 1000).toStringAsFixed(1)} kg'
+        ? '${AppNum.fixed(weight / 1000, 1)} kg'
         : weight > 0
             ? '$weight g'
             : null;
@@ -465,10 +465,10 @@ class _StatsHero extends StatelessWidget {
         ? null
         : pb.weightG != null
             ? (pb.weightG! >= 1000
-                ? '${(pb.weightG! / 1000).toStringAsFixed(1)} kg'
+                ? '${AppNum.fixed(pb.weightG! / 1000, 1)} kg'
                 : '${pb.weightG} g')
             : pb.lengthCm != null
-                ? '${pb.lengthCm!.toStringAsFixed(0)} cm'
+                ? AppNum.cm(pb.lengthCm!)
                 : null;
 
     return Container(
@@ -1255,7 +1255,7 @@ class _CatchCard extends ConsumerWidget {
                       if (entry.weightG != null)
                         _MetricBadge(
                           text: entry.weightG! >= 1000
-                              ? '${(entry.weightG! / 1000).toStringAsFixed(2)} kg'
+                              ? AppNum.kg(entry.weightG!)
                               : '${entry.weightG} g',
                           color: ApexColors.primary,
                           filled: true,
@@ -1264,7 +1264,7 @@ class _CatchCard extends ConsumerWidget {
                         _MetricBadge(
                           text: entry.lengthCm! % 1 == 0
                               ? '${entry.lengthCm!.toInt()} cm'
-                              : '${entry.lengthCm!.toStringAsFixed(1)} cm',
+                              : AppNum.cm(entry.lengthCm!),
                           color: c.textSecondary,
                           filled: false,
                         ),

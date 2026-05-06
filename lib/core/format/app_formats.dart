@@ -42,6 +42,52 @@ abstract class AppDateFormats {
   static final DateFormat monthShort = DateFormat('MMM', appLocale);
 }
 
+/// Zahlen-Formatter f\u00fcr deutsche Anzeige (Komma als Dezimaltrenner).
+///
+/// Wird f\u00fcr alle Mengen/Ma\u00df-Werte verwendet (kg, m, cm, mm, hPa).
+/// Koordinaten bleiben mit Punkt, weil sie h\u00e4ufig in Maps-URLs landen.
+abstract class AppNum {
+  /// Wandelt eine Zahl mit fester Nachkommastellen-Zahl in den deutschen
+  /// Stil ("12,5"). F\u00fcr negative Werte/Vorzeichen bleibt das Vorzeichen
+  /// erhalten.
+  static String fixed(num value, int fractionDigits) =>
+      value.toStringAsFixed(fractionDigits).replaceAll('.', ',');
+
+  /// Wandelt einen Text-Wert mit Punkt (z. B. ein toString() von double)
+  /// in den deutschen Stil mit Komma. Leere/null-Werte werden zu ''.
+  static String text(Object? value) =>
+      value?.toString().replaceAll('.', ',') ?? '';
+
+  /// Gewicht in Gramm als kg (z. B. 1500 \u2192 "1,50 kg") oder g
+  /// (kleiner 1\u202fkg \u2192 "850 g").
+  static String kg(int grams) {
+    if (grams >= 1000) return '${fixed(grams / 1000, 2)} kg';
+    return '$grams g';
+  }
+
+  /// Tiefe/L\u00e4nge in Meter (z. B. 4.5 \u2192 "4,5 m"), ganze Zahlen ohne
+  /// Nachkommastelle.
+  static String meters(double m, {int maxFractionDigits = 1}) {
+    if (m == m.roundToDouble()) return '${m.toStringAsFixed(0)} m';
+    return '${fixed(m, maxFractionDigits)} m';
+  }
+
+  /// L\u00e4nge in cm (90 \u2192 "90 cm", 12.5 \u2192 "12,5 cm").
+  static String cm(double v) {
+    if (v == v.roundToDouble()) return '${v.toStringAsFixed(0)} cm';
+    return '${fixed(v, 1)} cm';
+  }
+
+  /// Niederschlag in mm (1 Nachkommastelle).
+  static String mm(double v) => '${fixed(v, 1)} mm';
+
+  /// Druck-Delta mit Vorzeichen ("+1,5 hPa" / "\u22120,8 hPa").
+  static String hPaDelta(double v) {
+    final sign = v >= 0 ? '+' : '';
+    return '$sign${fixed(v, 1)} hPa';
+  }
+}
+
 /// Formatierung der Drucktendenz (Pfeil + signierter hPa-Wert).
 ///
 /// Schwellen unterscheiden sich je nach Bezugszeitraum (3 h vs. 24 h),
@@ -83,7 +129,7 @@ abstract class PressureTrend {
       return absoluteHpa != null ? '${absoluteHpa.round()} hPa' : '–';
     }
     final sign = deltaHpa >= 0 ? '+' : '';
-    return '${arrow(deltaHpa, t: t)} $sign${deltaHpa.toStringAsFixed(1)} hPa';
+    return '${arrow(deltaHpa, t: t)} $sign${AppNum.fixed(deltaHpa, 1)} hPa';
   }
 
   /// Farbe nach Stärke der Tendenz – stabile Druckverhältnisse = ruhig.

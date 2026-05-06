@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 
+import '../../../core/format/app_formats.dart';
 import '../../models/catch_entry.dart';
 import '../../models/trip.dart';
 import 'notification_categories.dart';
@@ -150,7 +151,7 @@ class NotificationScheduler {
     final best = hits.first;
     final dateStr = DateFormat('dd.MM.', 'de').format(best.caughtAt);
     final lengthPart = best.lengthCm != null
-        ? ' ${best.lengthCm!.toStringAsFixed(0)} cm'
+        ? ' ${AppNum.cm(best.lengthCm!)}'
         : '';
     final body =
         'Vor einem Jahr ($dateStr): ${best.species.displayName}$lengthPart. '

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/format/app_formats.dart';
 import '../../core/theme/app_theme.dart';
 import '../models/catch_entry.dart';
 
@@ -215,7 +216,7 @@ class _PbCard extends StatelessWidget {
   final PbEvent event;
 
   String _formatWeight(int g) =>
-      g >= 1000 ? '${(g / 1000).toStringAsFixed(2)} kg' : '$g g';
+      g >= 1000 ? AppNum.kg(g) : '$g g';
 
   @override
   Widget build(BuildContext context) {
@@ -238,9 +239,9 @@ class _PbCard extends StatelessWidget {
       lines.add(
         _StatRow(
           label: 'LÄNGE',
-          newValue: '${e.newLengthCm!.toStringAsFixed(0)} cm',
+          newValue: AppNum.cm(e.newLengthCm!),
           oldValue: e.previousLengthCm != null
-              ? '${e.previousLengthCm!.toStringAsFixed(0)} cm'
+              ? AppNum.cm(e.previousLengthCm!)
               : null,
         ),
       );

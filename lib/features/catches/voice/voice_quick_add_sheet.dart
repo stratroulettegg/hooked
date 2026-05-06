@@ -11,6 +11,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
 
+import '../../../core/format/app_formats.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/catch_entry.dart';
 import '../../../shared/services/app_providers.dart';
@@ -742,7 +743,7 @@ class _ParsedSummary extends StatelessWidget {
     }
     if (parsed.lengthCm != null) {
       chips.add(_chip(
-        '${parsed.lengthCm!.toStringAsFixed(parsed.lengthCm! % 1 == 0 ? 0 : 1)} cm',
+        AppNum.cm(parsed.lengthCm!),
         bg: color.surface,
         fg: color.textPrimary,
         border: color.border,
@@ -750,11 +751,8 @@ class _ParsedSummary extends StatelessWidget {
     }
     if (parsed.weightG != null) {
       final w = parsed.weightG!;
-      final label = w >= 1000
-          ? '${(w / 1000).toStringAsFixed(2)} kg'
-          : '$w g';
       chips.add(_chip(
-        label,
+        AppNum.kg(w),
         bg: color.surface,
         fg: color.textPrimary,
         border: color.border,

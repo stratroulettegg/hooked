@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/engines/spot_heatmap_engine.dart';
+import '../../core/format/app_formats.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
@@ -693,7 +694,7 @@ class _SpotCard extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '${spot.depthM!.toStringAsFixed(spot.depthM! % 1 == 0 ? 0 : 1)} m',
+                            AppNum.meters(spot.depthM!),
                             style: TextStyle(
                               fontFamily: 'Rajdhani',
                               fontSize: 17,
@@ -776,7 +777,7 @@ class _SpotCard extends ConsumerWidget {
                       _SpotFooterChip(
                         icon: Icons.height,
                         text:
-                            '${spot.depthM!.toStringAsFixed(spot.depthM! % 1 == 0 ? 0 : 1)} m',
+                            AppNum.meters(spot.depthM!),
                         iconColor: ApexColors.primary,
                       ),
                     if (seasonNote != null && !compact)
@@ -1760,8 +1761,8 @@ class _HeatmapCellCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${cell.catchCount} Fang${cell.catchCount == 1 ? '' : 'e'}'
-                    '${cell.avgLengthCm > 0 ? ' · Ø ${cell.avgLengthCm.toStringAsFixed(0)} cm' : ''}'
-                    '${cell.totalWeightG > 0 ? ' · ${(cell.totalWeightG / 1000).toStringAsFixed(1)} kg ges.' : ''}',
+                    '${cell.avgLengthCm > 0 ? ' · Ø ${AppNum.cm(cell.avgLengthCm)}' : ''}'
+                    '${cell.totalWeightG > 0 ? ' · ${AppNum.fixed(cell.totalWeightG / 1000, 1)} kg ges.' : ''}',
                     style: TextStyle(fontSize: 12, color: c.textSecondary),
                   ),
                   if (topSpecies.isNotEmpty)

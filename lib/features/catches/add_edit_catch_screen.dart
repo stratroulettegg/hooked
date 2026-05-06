@@ -71,10 +71,10 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
     _caughtAt = e?.caughtAt ?? DateTime.now();
     if (e != null) {
       _weightCtrl.text = e.weightG?.toString() ?? '';
-      _lengthCtrl.text = e.lengthCm?.toString() ?? '';
+      _lengthCtrl.text = AppNum.text(e.lengthCm);
       _lureCtrl.text = e.lure ?? '';
       _lureColorCtrl.text = e.lureColor ?? '';
-      _depthCtrl.text = e.depthM?.toString() ?? '';
+      _depthCtrl.text = AppNum.text(e.depthM);
       _notesCtrl.text = e.notes ?? '';
       _retrieveStyles
         ..clear()

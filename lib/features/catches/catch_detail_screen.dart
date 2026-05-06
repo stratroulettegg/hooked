@@ -365,9 +365,7 @@ class _CatchDetailContentState extends ConsumerState<_CatchDetailContent> {
                                             if (entry.weightG != null) ...[
                                               const SizedBox(width: 10),
                                               Text(
-                                                entry.weightG! >= 1000
-                                                    ? '${(entry.weightG! / 1000).toStringAsFixed(2)} kg'
-                                                    : '${entry.weightG} g',
+                                                AppNum.kg(entry.weightG!),
                                                 style: const TextStyle(
                                                   fontFamily: 'Rajdhani',
                                                   fontSize: 22,

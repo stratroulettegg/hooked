@@ -47,7 +47,7 @@ class DailyForecastCard extends ConsumerWidget {
         : deltaHpa <= -1.0
         ? '↘'
         : '→';
-    final delta = '$arrow $sign${deltaHpa.toStringAsFixed(1)} hPa';
+    final delta = '$arrow $sign${AppNum.fixed(deltaHpa, 1)} hPa';
     if (absoluteHpa == null) return delta;
     return '$delta · ${absoluteHpa.round()}';
   }
@@ -171,10 +171,10 @@ class DailyForecastCard extends ConsumerWidget {
                         ? 'Regen · jetzt'
                         : 'Regen',
                     value: liveWeather?.precipitationMm != null
-                        ? '${liveWeather!.precipitationMm!.toStringAsFixed(1)} mm'
+                        ? AppNum.mm(liveWeather!.precipitationMm!)
                         : (f.precipitationSumMm != null
-                              ? '${f.precipitationSumMm!.toStringAsFixed(1)} mm'
-                                    '${f.precipitationProbabilityMaxPct != null ? ' · ${f.precipitationProbabilityMaxPct!.round()}%' : ''}'
+                              ? AppNum.mm(f.precipitationSumMm!) +
+                                    (f.precipitationProbabilityMaxPct != null ? ' · ${f.precipitationProbabilityMaxPct!.round()}%' : '')
                               : '–'),
                   ),
                   if (liveTrend3hHpa != null)
