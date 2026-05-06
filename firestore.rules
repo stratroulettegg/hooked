@@ -59,13 +59,40 @@ service cloud.firestore {
 
     // Community-Feed: öffentliche Fang-Posts.
     // Lesen: jeder eingeloggte Nutzer (Feed-Stream).
-    // Schreiben: nur der Owner; userId muss der eigenen UID entsprechen.
+    // Schreiben: nur der Owner (für Inhalt); zusätzlich darf jeder
+    // Auth-User die Felder `likedBy` und `likeCount` ändern (Like-Toggle)
+    // sowie `commentCount` (atomare Inkrement-Schreibvorgänge beim
+    // Hinzufügen/Löschen von Kommentaren).
     match /feed/{postId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null
-                            && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+      // Owner darf alles updaten; Andere nur die Like-/Comment-Counter.
+      allow update: if request.auth != null
+                    && (
+                      resource.data.userId == request.auth.uid
+                      || request.resource.data.diff(resource.data)
+                            .affectedKeys()
+                            .hasOnly(['likedBy', 'likeCount', 'commentCount'])
+                    );
+
+      // Kommentare: lesen alle Auth-User, anlegen wer sich als Autor
+      // einträgt, löschen nur der Autor selbst (oder Post-Owner).
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.userId == request.auth.uid;
+        allow update: if request.auth != null
+                      && resource.data.userId == request.auth.uid;
+        allow delete: if request.auth != null
+                      && (
+                        resource.data.userId == request.auth.uid
+                        || get(/databases/$(database)/documents/feed/$(postId))
+                              .data.userId == request.auth.uid
+                      );
+      }
     }
   }
 }

@@ -1714,7 +1714,7 @@ class _CommunityFeedView extends ConsumerWidget {
 
 /// Eine Feed-Seite im Stil der eigenen Detailansicht: Foto als Hero,
 /// halbtransparentes Blur-Sheet mit den Details darüber.
-class _FeedPostPage extends StatelessWidget {
+class _FeedPostPage extends ConsumerWidget {
   const _FeedPostPage({required this.post});
 
   final FeedPost post;
@@ -1736,7 +1736,7 @@ class _FeedPostPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = ApexColors.of(context);
     final species = _species();
     final speciesLabel = species?.displayName ?? post.species;
@@ -1752,6 +1752,8 @@ class _FeedPostPage extends StatelessWidget {
     final authorName = post.userName?.isNotEmpty == true
         ? post.userName!
         : 'Angler:in';
+    final me = ref.watch(currentUserProvider);
+    final liked = me != null && post.likedBy.contains(me.uid);
 
     return Stack(
       children: [
@@ -1764,7 +1766,11 @@ class _FeedPostPage extends StatelessWidget {
           ),
         ),
 
-        // Unten: schwebende Meta-Pills auf dem Bild + darunter das Sheet.
+        // Rechte Action-Spalte (TikTok-Stil): Like + Kommentar.
+        // Liegt im selben unteren Bereich wie Meta-Pills + Sheet, damit
+        // die Buttons nicht mit dem Sheet kollidieren.
+
+        // Unten: Action-Spalte rechts, darunter Meta-Pills, darunter Sheet.
         Positioned(
           left: 0,
           right: 0,
@@ -1773,6 +1779,44 @@ class _FeedPostPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Action-Spalte rechts.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _FeedActionButton(
+                          icon: liked
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          iconColor:
+                              liked ? ApexColors.scoreLow : Colors.white,
+                          count: post.likeCount,
+                          onTap: me == null
+                              ? null
+                              : () => ref
+                                  .read(feedServiceProvider)
+                                  .toggleLike(post.id),
+                        ),
+                        const SizedBox(height: 12),
+                        _FeedActionButton(
+                          icon: Icons.mode_comment_outlined,
+                          iconColor: Colors.white,
+                          count: post.commentCount,
+                          onTap: me == null
+                              ? null
+                              : () => _openComments(context, post.id),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
               // Floating Glas-Pills (auf dem Bild, knapp \u00fcber dem Sheet).
               Padding(
                 padding:
@@ -1974,6 +2018,347 @@ class _FeedPostPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _openComments(BuildContext context, String postId) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FeedCommentsSheet(postId: postId),
+    );
+  }
+}
+
+/// Runder Glas-Button mit Icon + Counter (rechte Action-Spalte).
+class _FeedActionButton extends StatelessWidget {
+  const _FeedActionButton({
+    required this.icon,
+    required this.iconColor,
+    required this.count,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final int count;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipOval(
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Material(
+              color: Colors.black.withAlpha(110),
+              shape: const CircleBorder(
+                side: BorderSide(color: Color(0x33FFFFFF)),
+              ),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(icon, color: iconColor, size: 22),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (count > 0) ...[
+          const SizedBox(height: 4),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontFamily: 'Rajdhani',
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              color: Colors.white,
+              shadows: [
+                Shadow(color: Colors.black54, blurRadius: 4),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// BottomSheet mit Live-Kommentar-Stream und Eingabefeld.
+class _FeedCommentsSheet extends ConsumerStatefulWidget {
+  const _FeedCommentsSheet({required this.postId});
+  final String postId;
+
+  @override
+  ConsumerState<_FeedCommentsSheet> createState() =>
+      _FeedCommentsSheetState();
+}
+
+class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
+  final _ctrl = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(feedServiceProvider)
+          .addComment(widget.postId, text);
+      _ctrl.clear();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kommentar fehlgeschlagen: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  String _relTime(DateTime when) {
+    final d = DateTime.now().difference(when);
+    if (d.inMinutes < 1) return 'jetzt';
+    if (d.inMinutes < 60) return '${d.inMinutes} Min.';
+    if (d.inHours < 24) return '${d.inHours} Std.';
+    if (d.inDays < 7) return '${d.inDays} Tg.';
+    return AppDateFormats.dayMonthYearShort.format(when);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    final me = ref.watch(currentUserProvider);
+    final commentsAsync =
+        ref.watch(feedCommentsProvider(widget.postId));
+    final mediaInsets = MediaQuery.of(context).viewInsets.bottom;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (ctx, scrollCtrl) {
+        return ClipRRect(
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(20)),
+          child: Container(
+            color: c.background,
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: c.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Kommentare',
+                        style: TextStyle(
+                          fontFamily: 'Rajdhani',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: c.textPrimary,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: commentsAsync.when(
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(
+                        color: ApexColors.primary,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                    error: (e, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Konnte Kommentare nicht laden.',
+                          style: TextStyle(color: c.textMuted),
+                        ),
+                      ),
+                    ),
+                    data: (list) {
+                      if (list.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'Noch keine Kommentare. Mach den Anfang!',
+                            style: TextStyle(color: c.textMuted),
+                          ),
+                        );
+                      }
+                      return ListView.separated(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, i) {
+                          final cm = list[i];
+                          final isMine = me?.uid == cm.userId;
+                          return Row(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: c.border,
+                                backgroundImage: (cm.userPhotoUrl !=
+                                            null &&
+                                        cm.userPhotoUrl!.isNotEmpty)
+                                    ? NetworkImage(cm.userPhotoUrl!)
+                                    : null,
+                                child: (cm.userPhotoUrl == null ||
+                                        cm.userPhotoUrl!.isEmpty)
+                                    ? Icon(Icons.person,
+                                        size: 18, color: c.textMuted)
+                                    : null,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            cm.userName?.isNotEmpty == true
+                                                ? cm.userName!
+                                                : 'Angler:in',
+                                            overflow:
+                                                TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: c.textPrimary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          _relTime(cm.createdAt),
+                                          style: TextStyle(
+                                            color: c.textMuted,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      cm.text,
+                                      style: TextStyle(
+                                        color: c.textPrimary,
+                                        fontSize: 14,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isMine)
+                                IconButton(
+                                  icon: Icon(Icons.delete_outline,
+                                      size: 18, color: c.textMuted),
+                                  onPressed: () => ref
+                                      .read(feedServiceProvider)
+                                      .deleteComment(
+                                          widget.postId, cm.id),
+                                ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                // Eingabefeld unten.
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: c.border),
+                    ),
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                      12, 8, 12, 8 + mediaInsets),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _ctrl,
+                          enabled: me != null && !_sending,
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _send(),
+                          decoration: InputDecoration(
+                            hintText: me == null
+                                ? 'Anmelden, um zu kommentieren'
+                                : 'Kommentar schreiben…',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide(color: c.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide(color: c.border),
+                            ),
+                            isDense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 10),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: ApexColors.primary,
+                                ),
+                              )
+                            : const Icon(Icons.send),
+                        color: ApexColors.primary,
+                        onPressed: me == null ? null : _send,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

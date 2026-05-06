@@ -100,9 +100,18 @@ final _db = LocalDatabaseService();
 const _uuid = Uuid();
 final _feedService = FeedService();
 
+/// FeedService f\u00fcr UI-Aktionen (Like/Kommentar).
+final feedServiceProvider = Provider<FeedService>((_) => _feedService);
+
 /// Stream der aktuellsten Community-Feed-Posts (gemeinsame Quelle f\u00fcr alle UIs).
 final feedPostsProvider = StreamProvider<List<FeedPost>>((ref) {
   return _feedService.watchFeed();
+});
+
+/// Stream der Kommentare zu einem Post.
+final feedCommentsProvider =
+    StreamProvider.family<List<FeedComment>, String>((ref, postId) {
+  return _feedService.watchComments(postId);
 });
 
 // ─── Catch Provider ──────────────────────────────────────────────────────────

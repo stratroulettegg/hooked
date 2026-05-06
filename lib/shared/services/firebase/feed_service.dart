@@ -23,6 +23,9 @@ class FeedPost {
   final String? waterBodyName;
   final DateTime caughtAt;
   final DateTime createdAt;
+  final List<String> likedBy;
+  final int likeCount;
+  final int commentCount;
 
   const FeedPost({
     required this.id,
@@ -38,6 +41,9 @@ class FeedPost {
     this.waterBodyName,
     required this.caughtAt,
     required this.createdAt,
+    this.likedBy = const [],
+    this.likeCount = 0,
+    this.commentCount = 0,
   });
 
   factory FeedPost.fromMap(String id, Map<String, dynamic> map) {
@@ -61,6 +67,40 @@ class FeedPost {
       waterBodyName: map['waterBodyName'] as String?,
       caughtAt: parseTs(map['caughtAt']),
       createdAt: parseTs(map['createdAt']),
+      likedBy: (map['likedBy'] as List?)?.cast<String>() ?? const [],
+      likeCount: (map['likeCount'] as num?)?.toInt() ?? 0,
+      commentCount: (map['commentCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Ein Kommentar zu einem Feed-Post.
+class FeedComment {
+  final String id;
+  final String userId;
+  final String? userName;
+  final String? userPhotoUrl;
+  final String text;
+  final DateTime createdAt;
+
+  const FeedComment({
+    required this.id,
+    required this.userId,
+    this.userName,
+    this.userPhotoUrl,
+    required this.text,
+    required this.createdAt,
+  });
+
+  factory FeedComment.fromMap(String id, Map<String, dynamic> map) {
+    final ts = map['createdAt'];
+    return FeedComment(
+      id: id,
+      userId: map['userId'] as String? ?? '',
+      userName: map['userName'] as String?,
+      userPhotoUrl: map['userPhotoUrl'] as String?,
+      text: map['text'] as String? ?? '',
+      createdAt: ts is Timestamp ? ts.toDate() : DateTime.now(),
     );
   }
 }
@@ -201,6 +241,103 @@ class FeedService {
             // wir das hier und lassen den Stream einfach mit leer laufen,
             // bis der nächste Auth-State eintrifft.
           });
+    });
+  }
+
+  /// Schaltet den Like des aktuellen Users für `postId` um.
+  /// Nutzt arrayUnion/arrayRemove + atomare Counter-Updates.
+  Future<void> toggleLike(String postId) async {
+    if (!FirebaseBootstrap.isAvailable) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ref = _db.collection('feed').doc(postId);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (!snap.exists) return;
+      final liked =
+          ((snap.data()?['likedBy'] as List?)?.cast<String>() ?? const [])
+              .contains(user.uid);
+      if (liked) {
+        tx.update(ref, {
+          'likedBy': FieldValue.arrayRemove([user.uid]),
+          'likeCount': FieldValue.increment(-1),
+        });
+      } else {
+        tx.update(ref, {
+          'likedBy': FieldValue.arrayUnion([user.uid]),
+          'likeCount': FieldValue.increment(1),
+        });
+      }
+    });
+  }
+
+  /// Fügt einen Kommentar hinzu und erhöht den Counter atomar.
+  Future<void> addComment(String postId, String text) async {
+    if (!FirebaseBootstrap.isAvailable) return;
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final postRef = _db.collection('feed').doc(postId);
+    final commentRef = postRef.collection('comments').doc();
+    final batch = _db.batch();
+    batch.set(commentRef, {
+      'userId': user.uid,
+      'userName': user.displayName,
+      'userPhotoUrl': user.photoURL,
+      'text': trimmed,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    batch.update(postRef, {
+      'commentCount': FieldValue.increment(1),
+    });
+    await batch.commit();
+  }
+
+  /// Löscht einen eigenen Kommentar.
+  Future<void> deleteComment(String postId, String commentId) async {
+    if (!FirebaseBootstrap.isAvailable) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final postRef = _db.collection('feed').doc(postId);
+    final commentRef = postRef.collection('comments').doc(commentId);
+    final batch = _db.batch();
+    batch.delete(commentRef);
+    batch.update(postRef, {
+      'commentCount': FieldValue.increment(-1),
+    });
+    try {
+      await batch.commit();
+    } catch (_) {
+      // Best-effort: wenn Counter-Update scheitert, ist der Kommentar
+      // dennoch gelöscht.
+    }
+  }
+
+  /// Stream der Kommentare zu einem Post (älteste zuerst).
+  Stream<List<FeedComment>> watchComments(String postId) {
+    if (!FirebaseBootstrap.isAvailable) {
+      return const Stream<List<FeedComment>>.empty();
+    }
+    return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+      if (user == null) {
+        return Stream<List<FeedComment>>.value(const []);
+      }
+      return _db
+          .collection('feed')
+          .doc(postId)
+          .collection('comments')
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map((d) => FeedComment.fromMap(d.id, d.data()))
+                .toList(),
+          )
+          .handleError((Object e, StackTrace st) {});
     });
   }
 }
