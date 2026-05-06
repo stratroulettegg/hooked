@@ -164,8 +164,9 @@ class CatchNotifier extends AsyncNotifier<List<CatchEntry>> {
     }
     try {
       await _feedService.publish(entry: entry, spot: spot);
-    } catch (_) {
+    } catch (e, st) {
       // Best-effort: Feed darf das lokale Speichern nicht blockieren.
+      debugPrint('Feed-Publish fehlgeschlagen f\u00fcr ${entry.id}: $e\n$st');
     }
   }
 }
