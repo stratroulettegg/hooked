@@ -840,28 +840,26 @@ class _SpotFooterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 240),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: iconColor),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: muted ? c.textMuted : c.textSecondary,
-                fontWeight: FontWeight.w600,
-                fontStyle: muted ? FontStyle.italic : FontStyle.normal,
-              ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: iconColor),
+        const SizedBox(width: 4),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 130),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: muted ? c.textMuted : c.textSecondary,
+              fontWeight: FontWeight.w600,
+              fontStyle: muted ? FontStyle.italic : FontStyle.normal,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
