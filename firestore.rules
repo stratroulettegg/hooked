@@ -65,27 +65,48 @@ service cloud.firestore {
     // Hinzufügen/Löschen von Kommentaren).
     match /feed/{postId} {
       allow read: if request.auth != null;
+      // Posts erfordern ein Foto (photoUrl muss befüllt sein) und
+      // eine korrekt gesetzte userId. Auto-hidden-Felder sind beim
+      // Anlegen nicht erlaubt – die werden ausschließlich vom
+      // Cloud-Function-Code bzw. Admin gesetzt.
       allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid;
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.photoUrl is string
+                    && request.resource.data.photoUrl.size() > 0
+                    && !('hidden' in request.resource.data.keys())
+                    && !('hiddenReason' in request.resource.data.keys());
       allow delete: if request.auth != null
                     && resource.data.userId == request.auth.uid;
-      // Owner darf alles updaten; Andere nur die Like-/Comment-Counter.
+      // Owner darf seine eigenen Posts updaten, darf aber den
+      // hidden-Status nicht selbst zurücknehmen. Andere User dürfen
+      // nur Like-/Comment-Counter modifizieren.
       allow update: if request.auth != null
                     && (
-                      resource.data.userId == request.auth.uid
+                      (
+                        resource.data.userId == request.auth.uid
+                        && !request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasAny(['hidden', 'hiddenReason', 'hiddenAt'])
+                      )
                       || request.resource.data.diff(resource.data)
                             .affectedKeys()
                             .hasOnly(['likedBy', 'likeCount', 'commentCount'])
                     );
 
       // Kommentare: lesen alle Auth-User, anlegen wer sich als Autor
-      // einträgt, löschen nur der Autor selbst (oder Post-Owner).
+      // einträgt (Text 1–1000 Zeichen), löschen nur Autor oder
+      // Post-Owner.
       match /comments/{commentId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null
-                      && request.resource.data.userId == request.auth.uid;
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 1000;
         allow update: if request.auth != null
-                      && resource.data.userId == request.auth.uid;
+                      && resource.data.userId == request.auth.uid
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() <= 1000;
         allow delete: if request.auth != null
                       && (
                         resource.data.userId == request.auth.uid

@@ -116,11 +116,14 @@ final blockedUidsProvider = StreamProvider<Set<String>>((ref) {
 });
 
 /// Stream der aktuellsten Community-Feed-Posts (gemeinsame Quelle f\u00fcr alle UIs).
-/// Posts von blockierten Nutzern werden client-seitig herausgefiltert.
+/// Posts von blockierten Nutzern und auto-versteckte Posts (`hidden=true`)
+/// werden client-seitig herausgefiltert.
 final feedPostsProvider = StreamProvider<List<FeedPost>>((ref) {
   final blocked = ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
   return _feedService.watchFeed().map(
-        (posts) => posts.where((p) => !blocked.contains(p.userId)).toList(),
+        (posts) => posts
+            .where((p) => !p.hidden && !blocked.contains(p.userId))
+            .toList(),
       );
 });
 

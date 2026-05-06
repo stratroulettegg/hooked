@@ -26,6 +26,7 @@ class FeedPost {
   final List<String> likedBy;
   final int likeCount;
   final int commentCount;
+  final bool hidden;
 
   const FeedPost({
     required this.id,
@@ -44,6 +45,7 @@ class FeedPost {
     this.likedBy = const [],
     this.likeCount = 0,
     this.commentCount = 0,
+    this.hidden = false,
   });
 
   factory FeedPost.fromMap(String id, Map<String, dynamic> map) {
@@ -70,6 +72,7 @@ class FeedPost {
       likedBy: (map['likedBy'] as List?)?.cast<String>() ?? const [],
       likeCount: (map['likeCount'] as num?)?.toInt() ?? 0,
       commentCount: (map['commentCount'] as num?)?.toInt() ?? 0,
+      hidden: map['hidden'] == true,
     );
   }
 }
