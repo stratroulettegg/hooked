@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
+import '../../shared/services/firebase/feed_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/h_scroll_with_hint.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
@@ -24,6 +25,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
   bool _onlyPB = false;
   _CatchSort _sort = _CatchSort.dateDesc;
   bool _twoColumns = false;
+  int _tab = 0; // 0 = Meine, 1 = Community
 
   /// Persönliche Rekord-IDs (pro Art jeweils der schwerste, ersatzweise längste).
   Set<String> _personalBestIds(List<CatchEntry> all) {
@@ -65,18 +67,32 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
 
     return Scaffold(
       appBar: const ApexAppBar(),
-      body: catchesAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(
-            color: ApexColors.primary,
-            strokeWidth: 2,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: _FeedTabSwitch(
+              value: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
           ),
-        ),
-        error: (e, _) => Center(child: Text('Fehler: $e')),
-        data: (catches) {
-          if (catches.isEmpty) {
-            return _EmptyState(onAdd: () => context.push('/catches/add'));
-          }
+          Expanded(
+            child: _tab == 1
+                ? const _CommunityFeedView()
+                : catchesAsync.when(
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(
+                        color: ApexColors.primary,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                    error: (e, _) => Center(child: Text('Fehler: $e')),
+                    data: (catches) {
+                      if (catches.isEmpty) {
+                        return _EmptyState(
+                          onAdd: () => context.push('/catches/add'),
+                        );
+                      }
 
           // Verfügbare Köder.
           final availableLures =
@@ -253,7 +269,10 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                 ),
             ],
           );
-        },
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -1464,6 +1483,325 @@ class _EmptyState extends StatelessWidget {
             onPressed: onAdd,
             icon: const Icon(Icons.add),
             label: const Text('Fang eintragen'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Segmented-Switch zwischen "Meine Fänge" und "Community-Feed".
+class _FeedTabSwitch extends StatelessWidget {
+  const _FeedTabSwitch({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    Widget tab(int i, String label, IconData icon) {
+      final active = i == value;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: active ? ApexColors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: active ? Colors.white : c.textMuted,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: active ? Colors.white : c.textPrimary,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          tab(0, 'Meine', Icons.person_outline),
+          tab(1, 'Community', Icons.public),
+        ],
+      ),
+    );
+  }
+}
+
+/// Zeigt den globalen Community-Feed.
+class _CommunityFeedView extends ConsumerWidget {
+  const _CommunityFeedView();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ApexColors.of(context);
+    final feedAsync = ref.watch(feedPostsProvider);
+    return feedAsync.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(
+          color: ApexColors.primary,
+          strokeWidth: 2,
+        ),
+      ),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Feed nicht verfügbar.\n$e',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.textMuted),
+          ),
+        ),
+      ),
+      data: (posts) {
+        if (posts.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.public, size: 56, color: c.textMuted),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Noch keine Community-Fänge',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Teile deinen ersten Fang im Feed:\nbeim Eintragen den Schalter "In Community-Feed teilen" aktivieren.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: c.textMuted, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          itemCount: posts.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (_, i) => _FeedPostCard(post: posts[i]),
+        );
+      },
+    );
+  }
+}
+
+class _FeedPostCard extends StatelessWidget {
+  const _FeedPostCard({required this.post});
+
+  final FeedPost post;
+
+  String _relativeTime(DateTime when) {
+    final diff = DateTime.now().difference(when);
+    if (diff.inMinutes < 1) return 'gerade eben';
+    if (diff.inMinutes < 60) return 'vor ${diff.inMinutes} Min.';
+    if (diff.inHours < 24) return 'vor ${diff.inHours} Std.';
+    if (diff.inDays < 7) return 'vor ${diff.inDays} Tg.';
+    return AppDateFormats.dayMonthYearShort.format(when);
+  }
+
+  String _speciesLabel() {
+    for (final s in FishSpecies.values) {
+      if (s.name == post.species) return s.displayName;
+    }
+    return post.species;
+  }
+
+  String _speciesEmoji() {
+    for (final s in FishSpecies.values) {
+      if (s.name == post.species) return s.emoji;
+    }
+    return '🐟';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    final size = post.weightG != null
+        ? '${(post.weightG! / 1000).toStringAsFixed(2)} kg'
+        : (post.lengthCm != null ? '${post.lengthCm!.toStringAsFixed(0)} cm' : '');
+
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (post.photoUrl != null && post.photoUrl!.isNotEmpty)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Image.network(
+                  post.photoUrl!,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (ctx, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      color: c.border.withValues(alpha: 0.3),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          color: ApexColors.primary,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => Container(
+                    color: c.border.withValues(alpha: 0.3),
+                    child: Icon(Icons.broken_image, color: c.textMuted),
+                  ),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: c.border,
+                      backgroundImage: (post.userPhotoUrl != null &&
+                              post.userPhotoUrl!.isNotEmpty)
+                          ? NetworkImage(post.userPhotoUrl!)
+                          : null,
+                      child: (post.userPhotoUrl == null ||
+                              post.userPhotoUrl!.isEmpty)
+                          ? Icon(Icons.person, size: 16, color: c.textMuted)
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        post.userName?.isNotEmpty == true
+                            ? post.userName!
+                            : 'Angler:in',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      _relativeTime(post.createdAt),
+                      style: TextStyle(color: c.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Text(_speciesEmoji(), style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 6),
+                    Text(
+                      _speciesLabel(),
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (size.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ApexColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          size,
+                          style: const TextStyle(
+                            color: ApexColors.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (post.lure != null && post.lure!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.set_meal_outlined, size: 14, color: c.textMuted),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          post.lureColor?.isNotEmpty == true
+                              ? '${post.lure} · ${post.lureColor}'
+                              : post.lure!,
+                          style: TextStyle(color: c.textMuted, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (post.waterBodyName != null &&
+                    post.waterBodyName!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.water, size: 14, color: c.textMuted),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          post.waterBodyName!,
+                          style: TextStyle(color: c.textMuted, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       ),

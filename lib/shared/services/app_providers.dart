@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +14,7 @@ import 'local_database_service.dart';
 import 'weather_service.dart';
 import 'firebase/firebase_bootstrap.dart';
 import 'firebase/trip_cloud_share_service.dart';
+import 'firebase/feed_service.dart';
 import '../widgets/pb_celebration.dart';
 
 // ─── Theme Mode Provider ─────────────────────────────────────────────────────
@@ -95,6 +98,12 @@ final predatorScoreProvider = FutureProvider<PredatorScore>((ref) async {
 
 final _db = LocalDatabaseService();
 const _uuid = Uuid();
+final _feedService = FeedService();
+
+/// Stream der aktuellsten Community-Feed-Posts (gemeinsame Quelle f\u00fcr alle UIs).
+final feedPostsProvider = StreamProvider<List<FeedPost>>((ref) {
+  return _feedService.watchFeed();
+});
 
 // ─── Catch Provider ──────────────────────────────────────────────────────────
 
@@ -113,22 +122,51 @@ class CatchNotifier extends AsyncNotifier<List<CatchEntry>> {
     ref
         .read(pbCelebrationControllerProvider)
         .maybeTrigger(newEntry: newEntry, previousCatches: previous);
+    if (newEntry.isShared) {
+      unawaited(_publishToFeed(newEntry));
+    }
     return newEntry;
   }
 
   Future<void> editCatch(CatchEntry entry) async {
+    final previous = (state.valueOrNull ?? const <CatchEntry>[])
+        .firstWhere((c) => c.id == entry.id, orElse: () => entry);
     await _db.updateCatch(entry);
     state = AsyncData([
       for (final c in state.valueOrNull ?? [])
         if (c.id == entry.id) entry else c,
     ]);
+    if (entry.isShared) {
+      unawaited(_publishToFeed(entry));
+    } else if (previous.isShared) {
+      unawaited(_feedService.unpublish(entry.id));
+    }
   }
 
   Future<void> removeCatch(String id) async {
+    final entry = (state.valueOrNull ?? const <CatchEntry>[])
+        .where((c) => c.id == id)
+        .firstOrNull;
     await _db.deleteCatch(id);
     state = AsyncData(
       (state.valueOrNull ?? []).where((c) => c.id != id).toList(),
     );
+    if (entry?.isShared ?? false) {
+      unawaited(_feedService.unpublish(id));
+    }
+  }
+
+  Future<void> _publishToFeed(CatchEntry entry) async {
+    FishingSpot? spot;
+    if (entry.shareWater && entry.spotId != null) {
+      final spots = ref.read(spotProvider).valueOrNull ?? const [];
+      spot = spots.where((s) => s.id == entry.spotId).firstOrNull;
+    }
+    try {
+      await _feedService.publish(entry: entry, spot: spot);
+    } catch (_) {
+      // Best-effort: Feed darf das lokale Speichern nicht blockieren.
+    }
   }
 }
 

@@ -21,7 +21,7 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       p.join(dbPath, 'apex.db'),
-      version: 4,
+      version: 5,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createTripTables(db);
@@ -31,6 +31,14 @@ class LocalDatabaseService {
         }
         if (oldVersion < 4) {
           await _createWaterDaysTable(db);
+        }
+        if (oldVersion < 5) {
+          await db.execute(
+            'ALTER TABLE catches ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 0',
+          );
+          await db.execute(
+            'ALTER TABLE catches ADD COLUMN share_water INTEGER NOT NULL DEFAULT 0',
+          );
         }
       },
       onCreate: (db, version) async {
@@ -53,7 +61,9 @@ class LocalDatabaseService {
             notes TEXT,
             spot_id TEXT,
             caught_at TEXT NOT NULL,
-            drill_duration_sec INTEGER
+            drill_duration_sec INTEGER,
+            is_shared INTEGER NOT NULL DEFAULT 0,
+            share_water INTEGER NOT NULL DEFAULT 0
           )
         ''');
 

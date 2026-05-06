@@ -61,6 +61,10 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
   // bleiben aber bestehen).
   bool _saveLocation = true;
 
+  // Community-Feed: opt-in.
+  bool _isShared = false;
+  bool _shareWater = false;
+
   bool _loading = false;
 
   @override
@@ -81,6 +85,8 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         ..addAll(e.retrieveStyles);
       _photoPath = e.photoPath;
       _spotId = e.spotId;
+      _isShared = e.isShared;
+      _shareWater = e.shareWater;
       // Nur als Prefill-Fallback merken, wenn es ein neuer Eintrag ist.
       if (widget.existing == null) {
         _prefillLat = e.lat;
@@ -225,6 +231,8 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         lat: _saveLocation ? (linkedLat ?? _prefillLat) : null,
         lng: _saveLocation ? (linkedLng ?? _prefillLng) : null,
         caughtAt: _caughtAt,
+        isShared: _isShared,
+        shareWater: _isShared && _shareWater,
       );
 
       if (widget.existing != null) {
@@ -440,6 +448,21 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
               value: _saveLocation,
               onChanged: (v) => setState(() => _saveLocation = v),
             ),
+            const SizedBox(height: 12),
+            _ShareToggle(
+              value: _isShared,
+              onChanged: (v) => setState(() {
+                _isShared = v;
+                if (!v) _shareWater = false;
+              }),
+            ),
+            if (_isShared) ...[
+              const SizedBox(height: 8),
+              _ShareWaterToggle(
+                value: _shareWater,
+                onChanged: (v) => setState(() => _shareWater = v),
+              ),
+            ],
             const SizedBox(height: 32),
           ],
         ),
@@ -1513,6 +1536,120 @@ class _PrivacyToggle extends StatelessWidget {
                   value
                       ? 'GPS-Koordinaten werden mit dem Fang gespeichert'
                       : 'Hotspot bleibt geheim — kein GPS am Fang',
+                  style: TextStyle(fontSize: 12, color: c.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: ApexColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShareToggle extends StatelessWidget {
+  const _ShareToggle({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            value ? Icons.public : Icons.lock_outline,
+            color: value ? ApexColors.primary : c.textMuted,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'In Community-Feed teilen',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: c.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value
+                      ? 'Fang ist für andere Angler sichtbar'
+                      : 'Fang bleibt privat',
+                  style: TextStyle(fontSize: 12, color: c.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: ApexColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShareWaterToggle extends StatelessWidget {
+  const _ShareWaterToggle({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            value ? Icons.water : Icons.water_outlined,
+            color: value ? ApexColors.primary : c.textMuted,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Gewässer teilen',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: c.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value
+                      ? 'Gewässername ist im Feed sichtbar'
+                      : 'Nur Fischart, Maße & Foto werden geteilt',
                   style: TextStyle(fontSize: 12, color: c.textMuted),
                 ),
               ],

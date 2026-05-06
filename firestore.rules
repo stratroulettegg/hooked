@@ -56,5 +56,16 @@ service cloud.firestore {
     match /{path=**}/participants/{participantId} {
       allow read: if request.auth != null;
     }
+
+    // Community-Feed: öffentliche Fang-Posts.
+    // Lesen: jeder eingeloggte Nutzer (Feed-Stream).
+    // Schreiben: nur der Owner; userId muss der eigenen UID entsprechen.
+    match /feed/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            && resource.data.userId == request.auth.uid;
+    }
   }
 }

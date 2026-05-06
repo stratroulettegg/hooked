@@ -200,6 +200,12 @@ class CatchEntry {
   final DateTime caughtAt;
   final int? drillDurationSec;
 
+  /// In den Community-Feed teilen.
+  final bool isShared;
+
+  /// Beim Teilen auch den Gewässernamen mit aufnehmen.
+  final bool shareWater;
+
   const CatchEntry({
     required this.id,
     required this.species,
@@ -219,6 +225,8 @@ class CatchEntry {
     this.spotId,
     required this.caughtAt,
     this.drillDurationSec,
+    this.isShared = false,
+    this.shareWater = false,
   });
 
   Map<String, dynamic> toMap() => {
@@ -242,6 +250,8 @@ class CatchEntry {
     'spot_id': spotId,
     'caught_at': caughtAt.toIso8601String(),
     'drill_duration_sec': drillDurationSec,
+    'is_shared': isShared ? 1 : 0,
+    'share_water': shareWater ? 1 : 0,
   };
 
   factory CatchEntry.fromMap(Map<String, dynamic> map) => CatchEntry(
@@ -263,6 +273,8 @@ class CatchEntry {
     spotId: map['spot_id'] as String?,
     caughtAt: DateTime.parse(map['caught_at'] as String),
     drillDurationSec: map['drill_duration_sec'] as int?,
+    isShared: (map['is_shared'] as int? ?? 0) == 1,
+    shareWater: (map['share_water'] as int? ?? 0) == 1,
   );
 
   CatchEntry copyWith({
@@ -284,6 +296,8 @@ class CatchEntry {
     String? spotId,
     DateTime? caughtAt,
     int? drillDurationSec,
+    bool? isShared,
+    bool? shareWater,
   }) => CatchEntry(
     id: id ?? this.id,
     species: species ?? this.species,
@@ -303,5 +317,7 @@ class CatchEntry {
     spotId: spotId ?? this.spotId,
     caughtAt: caughtAt ?? this.caughtAt,
     drillDurationSec: drillDurationSec ?? this.drillDurationSec,
+    isShared: isShared ?? this.isShared,
+    shareWater: shareWater ?? this.shareWater,
   );
 }
