@@ -76,7 +76,14 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: _FeedTabSwitch(
               value: _tab,
-              onChanged: (i) => setState(() => _tab = i),
+              onChanged: (i) {
+                setState(() => _tab = i);
+                // Beim Wechsel auf Community immer neu laden,
+                // damit der Stream sicher neu auf die Auth-Lage greift.
+                if (i == 1) {
+                  ref.invalidate(feedPostsProvider);
+                }
+              },
             ),
           ),
           Expanded(
