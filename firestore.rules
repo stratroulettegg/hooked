@@ -153,5 +153,10 @@ service cloud.firestore {
       allow read: if request.auth != null && uid == request.auth.uid;
       allow write: if false;
     }
+
+    // Tageszähler für SafeSearch-Calls – nur Cloud Functions.
+    match /visionUsage/{day} {
+      allow read, write: if false;
+    }
   }
 }

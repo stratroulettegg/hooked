@@ -285,6 +285,28 @@ function shouldBlock(annotation: {
 
 const visionClient = new vision.ImageAnnotatorClient();
 
+// Hard-Cap gegen Kostenexplosion: pro Tag werden nur so viele Bilder gegen
+// SafeSearch geprüft. Darüber hinaus werden Posts vorsorglich versteckt
+// (sicher > sparsam), Datei aber nicht gelöscht. Cloud Vision SafeSearch
+// kostet ~$1.50 / 1000 calls (erste 1000/Monat gratis).
+const SAFESEARCH_DAILY_CAP = 2000;
+
+async function tryReserveSafeSearchCall(): Promise<boolean> {
+  const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  const ref = db.collection("visionUsage").doc(day);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = (snap.data()?.count as number | undefined) ?? 0;
+    if (count >= SAFESEARCH_DAILY_CAP) return false;
+    tx.set(
+      ref,
+      { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+    return true;
+  });
+}
+
 export const onPhotoUploaded = onObjectFinalized(
   { region: "europe-west3" },
   async (event) => {
@@ -297,6 +319,25 @@ export const onPhotoUploaded = onObjectFinalized(
     const filename = parts[parts.length - 1];
     const postId = filename.replace(/\.[^.]+$/, "");
     if (!postId) return;
+
+    // Tages-Cap prüfen, bevor wir bezahlte Vision-API anfragen.
+    const allowed = await tryReserveSafeSearchCall().catch(() => true);
+    if (!allowed) {
+      logger.warn("SafeSearch daily cap reached – hiding post defensively", { postId });
+      await db
+        .collection("feed")
+        .doc(postId)
+        .set(
+          {
+            hidden: true,
+            hiddenReason: "safesearch_capped",
+            hiddenAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        .catch((e) => logger.error("Hide (capped) failed", e));
+      return;
+    }
 
     let safeSearch;
     try {
