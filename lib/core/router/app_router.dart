@@ -550,8 +550,19 @@ class _NavItem extends StatelessWidget {
     final c = ApexColors.of(context);
     final color = selected ? ApexColors.primary : c.textMuted;
     return Expanded(
-      child: InkWell(
+      child: InkResponse(
         onTap: onTap,
+        // Standard-Splash der BottomAppBar ist bei uns ein heller Ton, der
+        // sich beim Tippen kreisrund über das ganze Item legt und das Icon
+        // kurzzeitig „weiß überdeckt". Wir nehmen einen dezenten Tint in
+        // Primärfarbe und stellen das Highlight transparent, damit der
+        // Button auch beim Drücken sichtbar bleibt.
+        splashColor: ApexColors.primary.withAlpha(28),
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        radius: 36,
+        containedInkWell: false,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
