@@ -137,5 +137,21 @@ service cloud.firestore {
       allow read, write: if request.auth != null
                          && uid == request.auth.uid;
     }
+
+    // Aggregierte Reports pro Ziel \u2013 ausschlie\u00dflich vom
+    // Cloud-Function-Code (Admin SDK) gepflegt. Clients haben hier
+    // keinen Zugriff.
+    match /reportAggregates/{key} {
+      allow read, write: if false;
+    }
+
+    // User-Metadaten f\u00fcrs Server-seitige Rate-Limiting (Sliding-Window).
+    // Wird ausschlie\u00dflich von Cloud Functions geschrieben. Der User
+    // selbst darf seine eigenen Z\u00e4hler immerhin lesen (z.\u202fB. f\u00fcr eine
+    // sp\u00e4tere "Du postest zu schnell"-UI).
+    match /userMeta/{uid} {
+      allow read: if request.auth != null && uid == request.auth.uid;
+      allow write: if false;
+    }
   }
 }
