@@ -4,8 +4,7 @@ import '../../core/theme/app_theme.dart';
 
 /// Bottom-Navigation für Screens außerhalb der StatefulShellRoute
 /// (z. B. Profil, Missionen). Gleicher Stil wie _CenterDockedNavBar
-/// im Router, aber ohne FAB-Lücke (kein FloatingActionButton auf
-/// diesen Screens).
+/// im Router, aber ohne FAB-Lücke.
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({super.key});
 
