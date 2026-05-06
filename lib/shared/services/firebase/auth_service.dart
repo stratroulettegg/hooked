@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -175,9 +176,11 @@ class AuthService {
     await _auth.signOut();
   }
 
-  /// L\u00f6scht den Firebase-Account des aktuellen Users (DSGVO Art.\u00a017).
-  /// Erfordert ggf. k\u00fcrzliche Re-Authentifizierung \u2014 in dem Fall wirft
-  /// FirebaseAuth `requires-recent-login`.
+  /// Löscht den Account des aktuellen Users vollständig (DSGVO Art. 17 +
+  /// Apple-Guideline 5.1.1(v)). Die Cloud-Function `deleteUserAccount`
+  /// räumt erst alle Cloud-Daten (Feed-Posts, Kommentare, Storage-Fotos,
+  /// Reports, SharedTrips, userMeta/userBlocks) ab und löscht dann den
+  /// Auth-User per Admin SDK. Danach signt der Client lokal aus.
   Future<AuthResult> deleteAccount() async {
     if (!FirebaseBootstrap.isAvailable) return _notConfigured();
     final user = _auth.currentUser;
@@ -185,10 +188,23 @@ class AuthService {
       return const AuthResult.failure('no-user', 'Nicht angemeldet');
     }
     try {
-      await user.delete();
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('deleteUserAccount');
+      await callable.call<Map<String, dynamic>>();
+      // Auth-User ist serverseitig schon weg → lokale Session beenden.
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {}
+      try {
+        await _auth.signOut();
+      } catch (_) {}
       return const AuthResult.success(null);
+    } on FirebaseFunctionsException catch (e) {
+      return AuthResult.failure(e.code, e.message ?? 'Account-Löschung fehlgeschlagen.');
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(e.code, _readableMessage(e));
+    } catch (e) {
+      return AuthResult.failure('unknown', e.toString());
     }
   }
 

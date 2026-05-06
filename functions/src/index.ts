@@ -4,6 +4,7 @@ import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onObjectFinalized } from "firebase-functions/v2/storage";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import vision from "@google-cloud/vision";
 
@@ -386,6 +387,112 @@ export const onPhotoUploaded = onObjectFinalized(
       .catch((e) => logger.error("Delete photo failed", e));
 
     logger.warn("Post hidden by SafeSearch", { postId, reason });
+  },
+);
+
+// ── deleteUserAccount: DSGVO-Cascade ────────────────────────────────────
+
+/**
+ * Löscht alle Cloud-Daten des aufrufenden Users und anschließend den
+ * Auth-Account. Wird vom Client per httpsCallable aufgerufen, BEVOR der
+ * Client `signOut` ausführt. Nach erfolgreichem Return ist der Account
+ * vollständig entfernt (DSGVO Art. 17, App-Store-Guideline 5.1.1(v)).
+ *
+ * Bewusst keine Atomarität über alle Collections — fällt der Lauf in der
+ * Mitte aus, kann der User die Funktion erneut aufrufen (idempotent).
+ */
+export const deleteUserAccount = onCall(
+  { region: "us-central1", timeoutSeconds: 540 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Login erforderlich.");
+    }
+    logger.info("deleteUserAccount: start", { uid });
+
+    // 1) Eigene Posts inkl. Subcollection comments rekursiv löschen.
+    const ownPosts = await db
+      .collection("feed")
+      .where("userId", "==", uid)
+      .get();
+    for (const doc of ownPosts.docs) {
+      await db.recursiveDelete(doc.ref).catch((e) =>
+        logger.warn("recursiveDelete post failed", { post: doc.id, error: String(e) }),
+      );
+    }
+
+    // 2) Kommentare auf fremden Posts. CollectionGroup-Query, danach
+    //    commentCount auf den Parent-Posts dekrementieren.
+    const ownComments = await db
+      .collectionGroup("comments")
+      .where("userId", "==", uid)
+      .get();
+    const decrementByPost = new Map<string, number>();
+    for (const c of ownComments.docs) {
+      const postRef = c.ref.parent.parent;
+      if (postRef) {
+        decrementByPost.set(postRef.path, (decrementByPost.get(postRef.path) ?? 0) + 1);
+      }
+      await c.ref.delete().catch(() => undefined);
+    }
+    for (const [path, n] of decrementByPost) {
+      await db
+        .doc(path)
+        .update({ commentCount: FieldValue.increment(-n) })
+        .catch(() => undefined);
+    }
+
+    // 3) Eigene Reports löschen (DSGVO).
+    const ownReports = await db
+      .collection("reports")
+      .where("reporterUid", "==", uid)
+      .get();
+    for (const r of ownReports.docs) {
+      await r.ref.delete().catch(() => undefined);
+    }
+
+    // 4) Eigene SharedTrips inkl. participants-Subcollection.
+    const ownTrips = await db
+      .collection("sharedTrips")
+      .where("ownerUid", "==", uid)
+      .get();
+    for (const t of ownTrips.docs) {
+      await db.recursiveDelete(t.ref).catch((e) =>
+        logger.warn("recursiveDelete trip failed", { trip: t.id, error: String(e) }),
+      );
+    }
+
+    // 5) Eigene Invites.
+    const ownInvites = await db
+      .collection("invites")
+      .where("ownerUid", "==", uid)
+      .get();
+    for (const i of ownInvites.docs) {
+      await i.ref.delete().catch(() => undefined);
+    }
+
+    // 6) /userBlocks/{uid} und /userMeta/{uid} (samt Subcollections).
+    await db.recursiveDelete(db.collection("userBlocks").doc(uid)).catch(() => undefined);
+    await db.recursiveDelete(db.collection("userMeta").doc(uid)).catch(() => undefined);
+
+    // 7) Storage: feedPhotos/{uid}/** löschen.
+    try {
+      const bucket = getStorage().bucket();
+      await bucket.deleteFiles({ prefix: `feedPhotos/${uid}/` });
+    } catch (e) {
+      logger.warn("Storage cleanup failed", { uid, error: String(e) });
+    }
+
+    // 8) Auth-Account zuletzt entfernen. Damit ist der User komplett weg.
+    try {
+      await getAuth().deleteUser(uid);
+    } catch (e) {
+      logger.error("Auth deleteUser failed", { uid, error: String(e) });
+      throw new HttpsError("internal", "Account-Löschung fehlgeschlagen.");
+    }
+
+    logger.info("deleteUserAccount: done", { uid });
+    return { ok: true };
   },
 );
 
