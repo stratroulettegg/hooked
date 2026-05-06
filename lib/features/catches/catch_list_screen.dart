@@ -1571,16 +1571,55 @@ class _CommunityFeedView extends ConsumerWidget {
           strokeWidth: 2,
         ),
       ),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            'Feed nicht verfügbar.\n$e',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: c.textMuted),
+      error: (e, _) {
+        // Permission-Denied tritt typisch beim Logout/Login-Wechsel auf,
+        // bevor der Stream auf den neuen Auth-State umgeschwenkt ist.
+        // Statt einer rohen Exception zeigen wir einen freundlichen Hinweis.
+        final msg = e.toString().toLowerCase();
+        final isPermission = msg.contains('permission-denied') ||
+            msg.contains('permission_denied');
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isPermission ? Icons.lock_outline : Icons.cloud_off,
+                  size: 56,
+                  color: c.textMuted,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isPermission
+                      ? 'Feed gerade nicht verfügbar'
+                      : 'Verbindungsproblem',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isPermission
+                      ? 'Bitte einen Moment warten oder die App neu starten.'
+                      : 'Prüfe deine Internetverbindung und versuche es erneut.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: c.textMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => ref.invalidate(feedPostsProvider),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Erneut versuchen'),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
       data: (posts) {
         if (posts.isEmpty) {
           return Center(

@@ -155,19 +155,35 @@ class FeedService {
   }
 
   /// Stream der neuesten Feed-Beiträge.
+  ///
+  /// Reagiert live auf Login/Logout: ohne eingeloggten Nutzer wird ein
+  /// leerer Feed gestreamt (statt eines `permission-denied`-Fehlers, weil
+  /// die Rules nur für Auth-User lesen erlauben). Sobald sich der User
+  /// anmeldet, wechselt der Stream automatisch auf die Live-Daten.
   Stream<List<FeedPost>> watchFeed({int limit = 50}) {
     if (!FirebaseBootstrap.isAvailable) {
       return const Stream<List<FeedPost>>.empty();
     }
-    return _db
-        .collection('feed')
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((d) => FeedPost.fromMap(d.id, d.data()))
-              .toList(),
-        );
+    return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+      if (user == null) {
+        return Stream<List<FeedPost>>.value(const []);
+      }
+      return _db
+          .collection('feed')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map((d) => FeedPost.fromMap(d.id, d.data()))
+                .toList(),
+          )
+          .handleError((Object e, StackTrace st) {
+            // Wenn Logout direkt nach onAuthStateChanged passiert und der
+            // Snapshot-Stream noch einen permission-denied wirft, schlucken
+            // wir das hier und lassen den Stream einfach mit leer laufen,
+            // bis der nächste Auth-State eintrifft.
+          });
+    });
   }
 }
