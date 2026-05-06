@@ -6,7 +6,6 @@ import '../../shared/models/mission.dart';
 import '../../shared/services/app_providers.dart';
 import '../../shared/widgets/rank_banner.dart';
 import '../../shared/widgets/apex_app_bar.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
 
 class MissionsScreen extends ConsumerWidget {
   const MissionsScreen({super.key});
@@ -17,7 +16,6 @@ class MissionsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const ApexAppBar(),
-      bottomNavigationBar: const AppBottomNav(),
       body: missionsAsync.when(
         loading: () => const Center(
           child: CircularProgressIndicator(color: ApexColors.primary),

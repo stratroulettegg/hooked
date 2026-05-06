@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/engines/predator_score_engine.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/apex_app_bar.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
 import 'species_lexicon.dart';
 
 /// Lexikon der im Predator-Index aufgeführten Fischarten.
@@ -17,7 +16,6 @@ class LexiconScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: const ApexAppBar(),
-      bottomNavigationBar: const AppBottomNav(),
       body: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         itemCount: entries.length + 1,
@@ -177,7 +175,6 @@ class _SpeciesDetailScreen extends StatelessWidget {
     final p = entry.profile;
     return Scaffold(
       appBar: const ApexAppBar(),
-      bottomNavigationBar: const AppBottomNav(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [

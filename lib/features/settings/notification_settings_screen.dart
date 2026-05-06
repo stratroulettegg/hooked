@@ -7,7 +7,6 @@ import '../../shared/services/notifications/notification_categories.dart';
 import '../../shared/services/notifications/notification_prefs.dart';
 import '../../shared/services/notifications/notification_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
 
 /// Einstellungen für lokale Push-Benachrichtigungen.
 ///
@@ -60,7 +59,6 @@ class _NotificationSettingsScreenState
 
     return Scaffold(
       appBar: const ApexAppBar(),
-      bottomNavigationBar: const AppBottomNav(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [

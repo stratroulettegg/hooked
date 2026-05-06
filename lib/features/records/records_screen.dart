@@ -8,7 +8,6 @@ import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
 import '../../shared/services/app_providers.dart';
 import '../../shared/widgets/apex_app_bar.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/catch_thumb.dart';
 import '../catches/catch_detail_screen.dart';
 
@@ -25,7 +24,6 @@ class RecordsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const ApexAppBar(),
-      bottomNavigationBar: const AppBottomNav(),
       body: catchesAsync.when(
         loading: () => const Center(
           child: CircularProgressIndicator(

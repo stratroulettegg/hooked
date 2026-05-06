@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format/app_formats.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/apex_app_bar.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
 import 'water_days_providers.dart';
 
 /// Übersicht "Tage am Wasser" — rein lokal.
@@ -32,7 +31,6 @@ class WaterDaysScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const ApexAppBar(),
-      bottomNavigationBar: const AppBottomNav(),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddSheet(context, ref),
         backgroundColor: ApexColors.primary,

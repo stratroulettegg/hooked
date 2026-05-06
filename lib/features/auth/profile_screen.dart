@@ -6,7 +6,6 @@ import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/services/firebase/auth_service.dart';
 import '../../shared/services/notifications/notification_prefs.dart';
 import '../../shared/widgets/apex_app_bar.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
 
 /// Zeigt Profil-Info und bietet Logout / Account l\u00f6schen.
 class ProfileScreen extends ConsumerWidget {
@@ -21,7 +20,6 @@ class ProfileScreen extends ConsumerWidget {
       // Nicht angemeldet \u2192 direkt auf Login.
       return Scaffold(
         appBar: const ApexAppBar(),
-        bottomNavigationBar: const AppBottomNav(),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -66,7 +64,6 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const ApexAppBar(),
-      bottomNavigationBar: const AppBottomNav(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         children: [
