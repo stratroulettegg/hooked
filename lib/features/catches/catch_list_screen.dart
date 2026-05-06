@@ -9,6 +9,7 @@ import '../../shared/models/catch_entry.dart';
 import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
 import '../../shared/services/firebase/feed_service.dart';
+import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/h_scroll_with_hint.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
@@ -1563,6 +1564,42 @@ class _CommunityFeedView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ApexColors.of(context);
+    final user = ref.watch(currentUserProvider);
+    if (user == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline, size: 56, color: c.textMuted),
+              const SizedBox(height: 12),
+              Text(
+                'Nur für eingeloggte Angler:innen',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Melde dich an, um den Community-Feed zu sehen und eigene Fänge zu teilen.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => context.push('/auth'),
+                icon: const Icon(Icons.login, size: 16),
+                label: const Text('Anmelden'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final feedAsync = ref.watch(feedPostsProvider);
     return feedAsync.when(
       loading: () => const Center(
