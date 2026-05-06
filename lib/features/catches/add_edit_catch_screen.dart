@@ -448,21 +448,19 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
               value: _saveLocation,
               onChanged: (v) => setState(() => _saveLocation = v),
             ),
-            const SizedBox(height: 12),
-            _ShareToggle(
-              value: _isShared,
-              onChanged: (v) => setState(() {
+            const SizedBox(height: 24),
+            const _SectionLabel('COMMUNITY'),
+            const SizedBox(height: 8),
+            _CommunityShareCard(
+              isShared: _isShared,
+              shareWater: _shareWater,
+              onSharedChanged: (v) => setState(() {
                 _isShared = v;
                 if (!v) _shareWater = false;
               }),
+              onShareWaterChanged: (v) =>
+                  setState(() => _shareWater = v),
             ),
-            if (_isShared) ...[
-              const SizedBox(height: 8),
-              _ShareWaterToggle(
-                value: _shareWater,
-                onChanged: (v) => setState(() => _shareWater = v),
-              ),
-            ],
             const SizedBox(height: 32),
           ],
         ),
@@ -1552,56 +1550,170 @@ class _PrivacyToggle extends StatelessWidget {
   }
 }
 
-class _ShareToggle extends StatelessWidget {
-  const _ShareToggle({required this.value, required this.onChanged});
+/// Kombinierte Karte für die Community-Sektion: hebt sich durch
+/// Primary-Akzent klar von den lokalen "Spot"-Optionen darüber ab.
+/// Enthält den Haupt-Toggle (in Feed teilen) und ein eingerücktes
+/// Sub-Toggle (Gewässer mit teilen), das nur erscheint, wenn der
+/// Beitrag tatsächlich geteilt wird.
+class _CommunityShareCard extends StatelessWidget {
+  const _CommunityShareCard({
+    required this.isShared,
+    required this.shareWater,
+    required this.onSharedChanged,
+    required this.onShareWaterChanged,
+  });
 
-  final bool value;
-  final ValueChanged<bool> onChanged;
+  final bool isShared;
+  final bool shareWater;
+  final ValueChanged<bool> onSharedChanged;
+  final ValueChanged<bool> onShareWaterChanged;
 
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border),
+        color: isShared
+            ? ApexColors.primary.withAlpha(20)
+            : c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isShared
+              ? ApexColors.primary.withAlpha(120)
+              : c.border,
+          width: isShared ? 1.2 : 1,
+        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(
-            value ? Icons.public : Icons.lock_outline,
-            color: value ? ApexColors.primary : c.textMuted,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
               children: [
-                Text(
-                  'In Community-Feed teilen',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: c.textPrimary,
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: isShared
+                        ? ApexColors.primary.withAlpha(40)
+                        : c.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isShared
+                          ? ApexColors.primary.withAlpha(160)
+                          : c.border,
+                    ),
+                  ),
+                  child: Icon(
+                    isShared ? Icons.public : Icons.lock_outline,
+                    size: 18,
+                    color: isShared
+                        ? ApexColors.primary
+                        : c.textMuted,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  value
-                      ? 'Fang ist für andere Angler sichtbar'
-                      : 'Fang bleibt privat',
-                  style: TextStyle(fontSize: 12, color: c.textMuted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mit der Community teilen',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: c.textPrimary,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isShared
+                            ? 'Andere Angler:innen sehen Foto, Art & Maße'
+                            : 'Bleibt nur in deinem privaten Fangbuch',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: c.textMuted,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: isShared,
+                  onChanged: onSharedChanged,
+                  activeThumbColor: ApexColors.primary,
                 ),
               ],
             ),
           ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: ApexColors.primary,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            child: !isShared
+                ? const SizedBox.shrink()
+                : Column(
+                    children: [
+                      Container(
+                        height: 1,
+                        color: ApexColors.primary.withAlpha(60),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                            14, 10, 14, 12),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 4),
+                            Icon(
+                              shareWater
+                                  ? Icons.water
+                                  : Icons.water_outlined,
+                              size: 18,
+                              color: shareWater
+                                  ? ApexColors.primary
+                                  : c.textMuted,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Gewässer-Name mit teilen',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: c.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    shareWater
+                                        ? 'Gewässername ist im Feed sichtbar'
+                                        : 'Hotspot bleibt geheim',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: c.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch.adaptive(
+                              value: shareWater,
+                              onChanged: onShareWaterChanged,
+                              activeThumbColor: ApexColors.primary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -1609,59 +1721,3 @@ class _ShareToggle extends StatelessWidget {
   }
 }
 
-class _ShareWaterToggle extends StatelessWidget {
-  const _ShareWaterToggle({required this.value, required this.onChanged});
-
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = ApexColors.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            value ? Icons.water : Icons.water_outlined,
-            color: value ? ApexColors.primary : c.textMuted,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Gewässer teilen',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: c.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value
-                      ? 'Gewässername ist im Feed sichtbar'
-                      : 'Nur Fischart, Maße & Foto werden geteilt',
-                  style: TextStyle(fontSize: 12, color: c.textMuted),
-                ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: ApexColors.primary,
-          ),
-        ],
-      ),
-    );
-  }
-}
