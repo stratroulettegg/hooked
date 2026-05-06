@@ -192,6 +192,7 @@ class _FabFanOverlay extends StatelessWidget {
                 icon: Icons.list_alt,
                 background: ApexColors.primary,
                 foreground: Colors.white,
+                label: 'Manuell',
                 onTap: onListTap,
               ),
               _FabSatellite(
@@ -202,6 +203,7 @@ class _FabFanOverlay extends StatelessWidget {
                 icon: Icons.auto_awesome,
                 background: ApexColors.strike,
                 foreground: Colors.white,
+                label: 'KI-Scan',
                 onTap: onAiTap,
               ),
               _FabSatellite(
@@ -212,6 +214,7 @@ class _FabFanOverlay extends StatelessWidget {
                 icon: Icons.mic,
                 background: ApexColors.primary,
                 foreground: Colors.white,
+                label: 'Sprache',
                 onTap: onMicTap,
               ),
             ],
@@ -232,6 +235,7 @@ class _FabSatellite extends StatelessWidget {
     required this.background,
     required this.foreground,
     required this.onTap,
+    this.label,
   });
 
   final Offset center;
@@ -242,32 +246,64 @@ class _FabSatellite extends StatelessWidget {
   final Color background;
   final Color foreground;
   final VoidCallback onTap;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
+    const labelOffset = 8.0;
+    const labelHeight = 20.0;
     final left = center.dx - size / 2;
     final top = center.dy - size / 2;
     return Positioned(
       left: left,
       top: top,
       width: size,
-      height: size,
       child: Opacity(
         opacity: opacity,
         child: Transform.scale(
           scale: scale,
-          child: Material(
-            color: background,
-            shape: const CircleBorder(),
-            elevation: 8,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onTap,
-              child: Center(
-                child: Icon(icon, color: foreground, size: 30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: size,
+                height: size,
+                child: Material(
+                  color: background,
+                  shape: const CircleBorder(),
+                  elevation: 8,
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onTap,
+                    child: Center(
+                      child: Icon(icon, color: foreground, size: 30),
+                    ),
+                  ),
+                ),
               ),
-            ),
+              if (label != null) ...[  
+                const SizedBox(height: labelOffset),
+                SizedBox(
+                  height: labelHeight,
+                  child: Text(
+                    label!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(
+                          blurRadius: 4,
+                          color: Colors.black54,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
