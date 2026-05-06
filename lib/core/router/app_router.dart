@@ -212,7 +212,14 @@ class _ScaffoldWithNavBar extends StatelessWidget {
     // Balken zwischen Body und Tastatur entsteht.
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
-      body: navigationShell,
+      // Tap auf den Hintergrund (au\u00dferhalb von Eingabefeldern) schlie\u00dft
+      // die Tastatur \u2013 sonst bleibt sie auf iOS h\u00e4ngen, weil iOS keine
+      // automatische Done-Geste hat.
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: navigationShell,
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton:
           keyboardOpen ? null : const AppQuickAddFab(),
