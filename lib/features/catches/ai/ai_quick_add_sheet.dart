@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -92,9 +93,21 @@ class _AiQuickAddSheetState extends State<AiQuickAddSheet> {
       });
     } catch (e) {
       if (!mounted) return;
+      String msg;
+      if (e is FirebaseFunctionsException) {
+        msg = switch (e.code) {
+          'unauthenticated' => 'Bitte zuerst einloggen.',
+          'invalid-argument' => 'Bild konnte nicht verarbeitet werden.',
+          'not-found' => 'KI-Funktion nicht erreichbar.',
+          'resource-exhausted' => 'Tages-Limit erreicht. Morgen wieder!',
+          _ => e.message ?? e.toString(),
+        };
+      } else {
+        msg = e.toString();
+      }
       setState(() {
         _stage = _Stage.error;
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
     }
   }

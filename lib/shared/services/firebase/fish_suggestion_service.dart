@@ -27,29 +27,24 @@ class FishSuggestionService {
   /// einen Fischart-Vorschlag zurück. Fehler werden geschluckt — die
   /// Erkennung ist optional.
   Future<FishSuggestion?> suggestFromFile(File photo) async {
-    try {
-      // Klein halten: 768px reicht Gemini locker, hält Payload < 200 KB.
-      final bytes = await compressForUpload(photo, maxEdge: 768, quality: 80);
-      final base64Image = base64Encode(bytes);
+    // Klein halten: 768px reicht Gemini locker, hält Payload < 200 KB.
+    final bytes = await compressForUpload(photo, maxEdge: 768, quality: 80);
+    final base64Image = base64Encode(bytes);
 
-      final result = await _functions
-          .httpsCallable('suggestFishSpecies')
-          .call<Map<Object?, Object?>>({'imageBase64': base64Image});
+    final result = await _functions
+        .httpsCallable('suggestFishSpecies')
+        .call<Map<String, dynamic>>({'imageBase64': base64Image});
 
-      final data = result.data;
-      final raw = data['species'] as String?;
-      final capped = (data['capped'] as bool?) ?? false;
+    final data = result.data;
+    final raw = data['species'] as String?;
+    final capped = (data['capped'] as bool?) ?? false;
 
-      if (raw == null || raw == 'unbekannt') {
-        return FishSuggestion(species: null, capped: capped);
-      }
-
-      final match = FishSpecies.values.where((s) => s.name == raw).firstOrNull;
-      return FishSuggestion(species: match, capped: capped);
-    } catch (_) {
-      // Vorschlag ist optional — keine User-sichtbaren Fehler.
-      return null;
+    if (raw == null || raw == 'unbekannt') {
+      return FishSuggestion(species: null, capped: capped);
     }
+
+    final match = FishSpecies.values.where((s) => s.name == raw).firstOrNull;
+    return FishSuggestion(species: match, capped: capped);
   }
 }
 

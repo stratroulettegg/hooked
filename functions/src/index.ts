@@ -519,7 +519,7 @@ const SUPPORTED_SPECIES = [
 type SuggestedSpecies = (typeof SUPPORTED_SPECIES)[number];
 
 const GEMINI_DAILY_CAP = 5000; // Schutz gegen Kostenexplosion (~$0.14 max)
-const GEMINI_REGION = "europe-west3";
+const GEMINI_REGION = "europe-west1"; // europe-west3 unterstützt gemini-2.0-flash nicht
 const GEMINI_MODEL = "gemini-2.0-flash";
 
 const GEMINI_PROMPT = `Du bist ein Bestimmungs-Assistent für deutsche Süßwasser-Raubfische.
@@ -639,8 +639,7 @@ export const suggestFishSpecies = onCall(
       return { species, capped: false };
     } catch (e) {
       logger.error("Gemini call failed", { error: String(e) });
-      // Nicht weiterreichen — Vorschlag ist optional.
-      return { species: "unbekannt", capped: false, error: "model_error" };
+      throw new HttpsError("internal", `Bildanalyse fehlgeschlagen: ${String(e)}`);
     }
   },
 );
