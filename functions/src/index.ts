@@ -5,10 +5,14 @@ import { getStorage } from "firebase-admin/storage";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { logger } from "firebase-functions/v2";
+import { logger, setGlobalOptions } from "firebase-functions/v2";
 import vision from "@google-cloud/vision";
 
 initializeApp();
+
+// Alle Functions in europe-west3 — Co-Location mit Firestore + Storage
+// und DSGVO-freundlich (Verarbeitung in der EU).
+setGlobalOptions({ region: "europe-west3" });
 
 const DATABASE_ID = "default";
 const db = getFirestore(DATABASE_ID);
@@ -309,7 +313,7 @@ async function tryReserveSafeSearchCall(): Promise<boolean> {
 }
 
 export const onPhotoUploaded = onObjectFinalized(
-  { region: "europe-west3" },
+  {},
   async (event) => {
     const filePath = event.data.name;
     if (!filePath || !filePath.startsWith("feedPhotos/")) return;
@@ -402,7 +406,7 @@ export const onPhotoUploaded = onObjectFinalized(
  * Mitte aus, kann der User die Funktion erneut aufrufen (idempotent).
  */
 export const deleteUserAccount = onCall(
-  { region: "us-central1", timeoutSeconds: 540 },
+  { timeoutSeconds: 540 },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {

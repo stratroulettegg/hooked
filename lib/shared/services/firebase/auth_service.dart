@@ -196,7 +196,7 @@ class AuthService {
       return const AuthResult.failure('no-user', 'Nicht angemeldet');
     }
     try {
-      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
           .httpsCallable('deleteUserAccount');
       await callable.call<Map<String, dynamic>>();
       // Auth-User ist serverseitig schon weg → lokale Session beenden.
