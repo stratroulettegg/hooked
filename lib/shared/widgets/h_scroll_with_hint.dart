@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 
-/// Horizontaler ScrollView mit Pfeil-Indikator am Rand.
-/// → wenn mehr Inhalt rechts, ← wenn am rechten Ende angekommen.
+/// Horizontaler ScrollView mit Pfeil-Indikator.
+/// Der Pfeil sitzt AUSSERHALB des ScrollView – Chips werden durch
+/// ClipRect sauber abgeschnitten, kein Overlay nötig.
+/// → wenn mehr Inhalt rechts, ← wenn am rechten Ende.
 class HScrollWithHint extends StatefulWidget {
   const HScrollWithHint({
     super.key,
@@ -52,93 +54,33 @@ class _HScrollWithHintState extends State<HScrollWithHint> {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    // Wenn Inhalt komplett sichtbar (atStart & atEnd), kein Hinweis nötig
-    final showRight = !_atEnd;
-    final showLeft = !_atStart;
+    final allVisible = _atStart && _atEnd;
 
-    return Stack(
+    return Row(
       children: [
-        SingleChildScrollView(
-          controller: _controller,
-          scrollDirection: Axis.horizontal,
-          padding: widget.padding,
-          child: widget.child,
-        ),
-        // Rechts: → (noch mehr) oder ← (Ende erreicht)
-        Positioned(
-          right: 0,
-          top: 0,
-          bottom: 0,
-          child: IgnorePointer(
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: (showRight || _atEnd) && !(_atStart && _atEnd) ? 1.0 : 0.0,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          c.surface.withAlpha(0),
-                          c.surface,
-                        ],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    color: c.surface,
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      _atEnd ? Icons.chevron_left : Icons.chevron_right,
-                      size: 16,
-                      color: c.textMuted,
-                    ),
-                  ),
-                ],
-              ),
+        Expanded(
+          child: ClipRect(
+            child: SingleChildScrollView(
+              controller: _controller,
+              scrollDirection: Axis.horizontal,
+              padding: widget.padding,
+              child: widget.child,
             ),
           ),
         ),
-        // Links: ← (zurückscrollen möglich)
-        if (showLeft && !_atEnd)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: showLeft ? 1.0 : 0.0,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      color: c.surface,
-                      padding: const EdgeInsets.only(left: 4),
-                      child: Icon(
-                        Icons.chevron_left,
-                        size: 16,
-                        color: c.textMuted,
-                      ),
-                    ),
-                    Container(
-                      width: 40,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            c.surface,
-                            c.surface.withAlpha(0),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          child: allVisible
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Icon(
+                    _atEnd ? Icons.chevron_left : Icons.chevron_right,
+                    size: 16,
+                    color: c.textMuted,
+                  ),
                 ),
-              ),
-            ),
-          ),
+        ),
       ],
     );
   }
