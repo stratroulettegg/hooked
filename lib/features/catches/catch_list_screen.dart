@@ -1764,43 +1764,75 @@ class _FeedPostPage extends StatelessWidget {
           ),
         ),
 
-        // Floating Blur-Sheet — Höhe ergibt sich aus dem Inhalt.
+        // Unten: schwebende Meta-Pills auf dem Bild + darunter das Sheet.
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
-          child: ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(60),
-                    blurRadius: 24,
-                    offset: const Offset(0, -6),
-                  ),
-                ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Floating Glas-Pills (auf dem Bild, knapp \u00fcber dem Sheet).
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (post.lengthCm != null)
+                      _metaPill(
+                        c,
+                        Icons.straighten,
+                        '${post.lengthCm!.toStringAsFixed(0)} cm',
+                      ),
+                    _metaPill(
+                      c,
+                      Icons.access_time,
+                      _relativeTime(post.createdAt),
+                    ),
+                    if (hasWater)
+                      _metaPill(
+                        c,
+                        Icons.water,
+                        post.waterBodyName!,
+                      ),
+                    if (hasLure)
+                      _metaPill(
+                        c,
+                        Icons.set_meal_outlined,
+                        lureText!,
+                      ),
+                  ],
+                ),
               ),
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                child: ColoredBox(
-                  color: c.background.withAlpha(110),
-                  child: SafeArea(
-                    top: false,
-                    child: Padding(
-                      // Bottom-Padding so groß, dass der zentrierte
-                      // Quick-Add-FAB den Inhalt (z. B. Gewässername)
-                      // nicht überdeckt.
-                      padding:
-                          const EdgeInsets.fromLTRB(20, 14, 20, 56),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Kopfzeile: Spezies/Gewicht links, Autor rechts.
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+
+              // Floating Blur-Sheet \u2013 nur Spezies/Gewicht + Autor.
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20)),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(60),
+                        blurRadius: 24,
+                        offset: const Offset(0, -6),
+                      ),
+                    ],
+                  ),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                    child: ColoredBox(
+                      color: c.background.withAlpha(110),
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Expanded(
                                 child: Row(
@@ -1839,7 +1871,7 @@ class _FeedPostPage extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              // Autor: Avatar + Name + Datum (rechts).
+                              // Autor: Name + Datum + Avatar (rechts).
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment:
@@ -1896,68 +1928,52 @@ class _FeedPostPage extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          // Meta-Zeile: Länge · vor X · Gewässer · Köder.
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              if (post.lengthCm != null)
-                                _metaChip(
-                                  c,
-                                  Icons.straighten,
-                                  '${post.lengthCm!.toStringAsFixed(0)} cm',
-                                ),
-                              _metaChip(
-                                c,
-                                Icons.access_time,
-                                _relativeTime(post.createdAt),
-                              ),
-                              if (hasWater)
-                                _metaChip(
-                                  c,
-                                  Icons.water,
-                                  post.waterBodyName!,
-                                ),
-                              if (hasLure)
-                                _metaChip(
-                                  c,
-                                  Icons.set_meal_outlined,
-                                  lureText!,
-                                ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _metaChip(ApexColors c, IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: c.textMuted),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            fontFamily: 'Rajdhani',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: c.textSecondary,
-            letterSpacing: 0.3,
+  /// Schwebende Glas-Pill, die direkt auf dem Bild liegt.
+  Widget _metaPill(ApexColors c, IconData icon, String text) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withAlpha(110),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withAlpha(30)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13, color: Colors.white.withAlpha(220)),
+              const SizedBox(width: 5),
+              Text(
+                text,
+                style: const TextStyle(
+                  fontFamily: 'Rajdhani',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
