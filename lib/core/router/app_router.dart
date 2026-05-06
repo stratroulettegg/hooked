@@ -206,12 +206,16 @@ class _ScaffoldWithNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // FAB ausblenden, wenn die Tastatur offen ist \u2013 sonst klebt er
-    // unter iOS direkt \u00fcber der Tastatur und verdeckt Eingabefelder.
-    // Den Scaffold sonst normal resizen lassen, damit kein schwarzer
-    // Balken zwischen Body und Tastatur entsteht.
-    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
+      // Shell-Scaffold reagiert nicht auf Tastatur-Insets \u2013 NavBar und
+      // FAB bleiben fest am unteren Bildschirmrand und werden nicht
+      // hochgeschoben, wenn die Tastatur erscheint. Inner Scaffolds der
+      // einzelnen Screens k\u00fcmmern sich selbst um Tastatur-Padding f\u00fcr
+      // ihre Eingabefelder. Damit hinter der Tastatur kein schwarzer
+      // Balken auftaucht, geben wir dem Body und der NavBar die gleiche
+      // Theme-Farbe.
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      resizeToAvoidBottomInset: false,
       // Tap auf den Hintergrund (au\u00dferhalb von Eingabefeldern) schlie\u00dft
       // die Tastatur \u2013 sonst bleibt sie auf iOS h\u00e4ngen, weil iOS keine
       // automatische Done-Geste hat.
@@ -221,17 +225,14 @@ class _ScaffoldWithNavBar extends StatelessWidget {
         child: navigationShell,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton:
-          keyboardOpen ? null : const AppQuickAddFab(),
-      bottomNavigationBar: keyboardOpen
-          ? null
-          : _CenterDockedNavBar(
-              currentIndex: navigationShell.currentIndex,
-              onTap: (i) => navigationShell.goBranch(
-                i,
-                initialLocation: i == navigationShell.currentIndex,
-              ),
-            ),
+      floatingActionButton: const AppQuickAddFab(),
+      bottomNavigationBar: _CenterDockedNavBar(
+        currentIndex: navigationShell.currentIndex,
+        onTap: (i) => navigationShell.goBranch(
+          i,
+          initialLocation: i == navigationShell.currentIndex,
+        ),
+      ),
     );
   }
 }
