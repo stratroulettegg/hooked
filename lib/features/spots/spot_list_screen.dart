@@ -1069,10 +1069,11 @@ class _SpotFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: AnimatedContainer(
+    return IntrinsicWidth(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -1118,6 +1119,7 @@ class _SpotFilterChip extends StatelessWidget {
             ],
           ],
         ),
+      ),
       ),
     );
   }
