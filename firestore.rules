@@ -94,5 +94,27 @@ service cloud.firestore {
                       );
       }
     }
+
+    // Moderation: User-Reports.
+    // Jeder Auth-User darf einen Report anlegen, sofern er sich selbst
+    // als `reporterUid` einträgt. Lesen ist clientseitig gesperrt —
+    // Reports werden ausschließlich über die Firebase Console / Admin
+    // SDK ausgewertet. Updates/Löschen sind ebenfalls verboten.
+    match /reports/{reportId} {
+      allow read: if false;
+      allow create: if request.auth != null
+                    && request.resource.data.reporterUid == request.auth.uid
+                    && request.resource.data.targetType in ['post', 'comment', 'user']
+                    && request.resource.data.reason is string
+                    && request.resource.data.reason.size() < 500;
+      allow update, delete: if false;
+    }
+
+    // Block-Liste pro User: /userBlocks/{uid} = { blocked: [uid1, uid2, ...] }.
+    // Nur der Owner darf seine eigene Liste lesen/schreiben.
+    match /userBlocks/{uid} {
+      allow read, write: if request.auth != null
+                         && uid == request.auth.uid;
+    }
   }
 }

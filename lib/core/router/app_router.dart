@@ -16,6 +16,7 @@ import '../../features/forecast/forecast_screen.dart';
 import '../../features/water_days/water_days_screen.dart';
 import '../../features/records/records_screen.dart';
 import '../../features/settings/notification_settings_screen.dart';
+import '../../features/settings/blocked_users_screen.dart';
 import '../../features/auth/auth_screen.dart';
 import '../../features/auth/profile_screen.dart';
 import '../../features/auth/edit_profile_screen.dart';
@@ -182,6 +183,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/settings/notifications',
       builder: (_, __) => const NotificationSettingsScreen(),
+    ),
+    GoRoute(
+      path: '/settings/blocked',
+      builder: (_, __) => const BlockedUsersScreen(),
     ),
     // Auth — außerhalb der Shell
     GoRoute(path: '/auth', builder: (_, __) => const AuthScreen()),

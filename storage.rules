@@ -3,12 +3,17 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     // Profilbilder: Dateiname ist <uid>.jpg
+    // Content-Type bewusst eng auf Raster-Formate begrenzt (kein SVG —
+    // SVG kann Skripte enthalten und ist als Profilbild ohnehin sinnlos).
     match /profilePhotos/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null
                    && fileName == request.auth.uid + '.jpg'
                    && request.resource.size < 5 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+                   && request.resource.contentType in [
+                        'image/jpeg', 'image/jpg',
+                        'image/png', 'image/webp', 'image/heic'
+                      ];
       allow delete: if request.auth != null
                     && fileName == request.auth.uid + '.jpg';
     }
@@ -21,9 +26,19 @@ service firebase.storage {
       allow write: if request.auth != null
                    && userId == request.auth.uid
                    && request.resource.size < 8 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+                   && request.resource.contentType in [
+                        'image/jpeg', 'image/jpg',
+                        'image/png', 'image/webp', 'image/heic'
+                      ];
       allow delete: if request.auth != null
                     && userId == request.auth.uid;
+    }
+
+    // Default-Deny: alles, was nicht oben gematcht hat, ist verboten.
+    // Auch wenn die Standard-Regel von Firebase Storage 'deny' ist,
+    // machen wir es hier explizit sichtbar.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

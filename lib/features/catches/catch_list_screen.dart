@@ -13,6 +13,7 @@ import '../../shared/services/firebase/feed_service.dart';
 import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/h_scroll_with_hint.dart';
+import '../../shared/widgets/moderation_actions.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
 import 'catch_detail_screen.dart' show CatchDetailArgs;
 
@@ -1966,6 +1967,12 @@ class _FeedPostPage extends ConsumerWidget {
                               ? null
                               : () => _openComments(context, post.id),
                         ),
+                        if (me != null && me.uid != post.userId) ...[
+                          const SizedBox(height: 14),
+                          _FeedMoreButton(
+                            onTap: () => _showPostMenu(context, ref),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -2203,6 +2210,90 @@ class _FeedPostPage extends ConsumerWidget {
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _FeedCommentsSheet(postId: postId),
+    );
+  }
+
+  /// Bottom-Sheet mit Moderations-Aktionen für einen Feed-Post:
+  /// Melden + Nutzer blockieren. Sichtbar nur für Nicht-Owner.
+  void _showPostMenu(BuildContext context, WidgetRef ref) {
+    final c = ApexColors.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => SafeArea(
+        top: false,
+        child: ClipRRect(
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(20)),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              color: c.background.withAlpha(235),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 6),
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.flag_outlined,
+                        color: ApexColors.scoreLow),
+                    title: Text(
+                      'Beitrag melden',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () async {
+                      Navigator.of(sheetCtx).pop();
+                      await showReportSheet(
+                        context,
+                        ref,
+                        kind: ModerationTargetKind.post,
+                        postId: post.id,
+                        targetUid: post.userId,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.block,
+                        color: ApexColors.scoreLow),
+                    title: Text(
+                      'Nutzer blockieren',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Du siehst keine Beiträge mehr von ${post.userName?.isNotEmpty == true ? post.userName! : "diesem Nutzer"}.',
+                      style: TextStyle(color: c.textMuted, fontSize: 12),
+                    ),
+                    onTap: () async {
+                      Navigator.of(sheetCtx).pop();
+                      await confirmBlockUser(
+                        context,
+                        ref,
+                        targetUid: post.userId,
+                        targetName: post.userName,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2500,6 +2591,56 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
             onPressed: () => ref
                 .read(feedServiceProvider)
                 .deleteComment(widget.postId, cm.id),
+          ),
+        if (!isMine && me != null)
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, size: 18, color: c.textMuted),
+            color: c.surface,
+            onSelected: (v) async {
+              if (v == 'report') {
+                await showReportSheet(
+                  context,
+                  ref,
+                  kind: ModerationTargetKind.comment,
+                  postId: widget.postId,
+                  commentId: cm.id,
+                  targetUid: cm.userId,
+                );
+              } else if (v == 'block') {
+                await confirmBlockUser(
+                  context,
+                  ref,
+                  targetUid: cm.userId,
+                  targetName: cm.userName,
+                );
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined,
+                        size: 18, color: ApexColors.scoreLow),
+                    const SizedBox(width: 8),
+                    Text('Melden',
+                        style: TextStyle(color: c.textPrimary)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(Icons.block,
+                        size: 18, color: ApexColors.scoreLow),
+                    const SizedBox(width: 8),
+                    Text('Nutzer blockieren',
+                        style: TextStyle(color: c.textPrimary)),
+                  ],
+                ),
+              ),
+            ],
           ),
       ],
     );
@@ -2913,6 +3054,44 @@ class _SharedBadge extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Kleiner runder Glas-Button für sekundäre Aktionen (3-Punkte-Menü)
+/// in der rechten Action-Spalte des Feed-Posts.
+class _FeedMoreButton extends StatelessWidget {
+  const _FeedMoreButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withAlpha(80),
+          border: Border.all(
+            color: Colors.white.withAlpha(40),
+            width: 0.7,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(120),
+              blurRadius: 12,
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.more_vert,
+          color: Colors.white,
+          size: 20,
+        ),
+      ),
     );
   }
 }

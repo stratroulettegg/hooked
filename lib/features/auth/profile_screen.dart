@@ -131,7 +131,11 @@ class ProfileScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _Section(title: 'EINSTELLUNGEN', children: [_NotificationsTile()]),
+          _Section(title: 'EINSTELLUNGEN', children: [
+            _NotificationsTile(),
+            const Divider(height: 1),
+            const _BlockedUsersTile(),
+          ]),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: () async {
@@ -352,6 +356,52 @@ class _NotificationsTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
+                      style: TextStyle(fontSize: 11, color: c.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: c.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BlockedUsersTile extends StatelessWidget {
+  const _BlockedUsersTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.push('/settings/blocked'),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.block, size: 18, color: ApexColors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Blockierte Nutzer',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: c.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Block-Liste verwalten',
                       style: TextStyle(fontSize: 11, color: c.textMuted),
                     ),
                   ],

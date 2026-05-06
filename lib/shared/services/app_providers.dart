@@ -15,6 +15,7 @@ import 'weather_service.dart';
 import 'firebase/firebase_bootstrap.dart';
 import 'firebase/trip_cloud_share_service.dart';
 import 'firebase/feed_service.dart';
+import 'firebase/moderation_service.dart';
 import '../widgets/pb_celebration.dart';
 
 // ─── Theme Mode Provider ─────────────────────────────────────────────────────
@@ -99,13 +100,28 @@ final predatorScoreProvider = FutureProvider<PredatorScore>((ref) async {
 final _db = LocalDatabaseService();
 const _uuid = Uuid();
 final _feedService = FeedService();
+final _moderationService = ModerationService();
 
 /// FeedService f\u00fcr UI-Aktionen (Like/Kommentar).
 final feedServiceProvider = Provider<FeedService>((_) => _feedService);
 
+/// ModerationService f\u00fcr Reports und Block-Listen.
+final moderationServiceProvider =
+    Provider<ModerationService>((_) => _moderationService);
+
+/// Stream der UIDs, die der eingeloggte Nutzer blockiert hat.
+/// Wird als Filter f\u00fcr Feed und Kommentare verwendet.
+final blockedUidsProvider = StreamProvider<Set<String>>((ref) {
+  return _moderationService.watchBlockedUids();
+});
+
 /// Stream der aktuellsten Community-Feed-Posts (gemeinsame Quelle f\u00fcr alle UIs).
+/// Posts von blockierten Nutzern werden client-seitig herausgefiltert.
 final feedPostsProvider = StreamProvider<List<FeedPost>>((ref) {
-  return _feedService.watchFeed();
+  final blocked = ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
+  return _feedService.watchFeed().map(
+        (posts) => posts.where((p) => !blocked.contains(p.userId)).toList(),
+      );
 });
 
 /// Stream der eigenen Feed-Posts (alle, ohne Limit), als Map keyed by postId.
@@ -115,10 +131,14 @@ final myFeedPostsProvider = StreamProvider<Map<String, FeedPost>>((ref) {
       );
 });
 
-/// Stream der Kommentare zu einem Post.
+/// Stream der Kommentare zu einem Post. Kommentare blockierter Nutzer
+/// werden ebenfalls client-seitig ausgeblendet.
 final feedCommentsProvider =
     StreamProvider.family<List<FeedComment>, String>((ref, postId) {
-  return _feedService.watchComments(postId);
+  final blocked = ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
+  return _feedService.watchComments(postId).map(
+        (list) => list.where((c) => !blocked.contains(c.userId)).toList(),
+      );
 });
 
 // ─── Catch Provider ──────────────────────────────────────────────────────────
