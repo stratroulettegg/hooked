@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import '../../utils/image_compression.dart';
 import 'firebase_bootstrap.dart';
 
 /// Ergebnis eines Auth-Versuchs.
@@ -135,12 +136,19 @@ class AuthService {
         await user.updateDisplayName(trimmed.isEmpty ? null : trimmed);
       }
       if (photoFile != null) {
+        // Profilbild auf 512px / q=85 reduzieren — reicht für Avatare,
+        // spart Storage- und Egress-Kosten.
+        final bytes = await compressForUpload(
+          photoFile,
+          maxEdge: 512,
+          quality: 85,
+        );
         final ref = FirebaseStorage.instance
             .ref()
             .child('profilePhotos')
             .child('${user.uid}.jpg');
-        await ref.putFile(
-          photoFile,
+        await ref.putData(
+          bytes,
           SettableMetadata(contentType: 'image/jpeg'),
         );
         final url = await ref.getDownloadURL();

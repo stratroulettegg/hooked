@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../models/catch_entry.dart';
 import '../../models/fishing_spot.dart';
+import '../../utils/image_compression.dart';
 import '../app_paths.dart';
 import 'firebase_bootstrap.dart';
 
@@ -159,10 +160,13 @@ class FeedService {
     // Race-Conditions (z.\u202fB. Datei in der Zwischenzeit gel\u00f6scht).
     if (file == null) return;
     try {
+      // Vor Upload auf max 1920px / q=82 herunterskalieren — spart bis zu
+      // 70% Storage-Egress, ohne Sichtbarkeitsverlust auf Mobile-Displays.
+      final bytes = await compressForUpload(file, maxEdge: 1920, quality: 82);
       final ref = FirebaseStorage.instance.ref().child(
         'feedPhotos/${user.uid}/${entry.id}.jpg',
       );
-      await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
       photoUrl = await ref.getDownloadURL();
     } catch (e) {
       // Upload-Fehler nicht den ganzen Publish kippen lassen.
