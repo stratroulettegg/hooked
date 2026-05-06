@@ -128,9 +128,20 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
 
     await _speech.listen(
       localeId: 'de_DE',
+      // Android beendet die Aufnahme sonst bereits nach ~2 s Stille — beim
+      // Diktieren von Längen/Gewichten ("Hecht, 73 cm, 1 Komma 3 Kilo")
+      // entstehen aber natürliche kurze Pausen zwischen den Werten.
+      // 8 s Pausen-Toleranz + 30 s Gesamtdauer geben genug Luft.
+      pauseFor: const Duration(seconds: 8),
+      listenFor: const Duration(seconds: 30),
       listenOptions: stt.SpeechListenOptions(
         partialResults: true,
-        cancelOnError: true,
+        // Auf Android wirft der System-Recognizer bei kleinen Pausen oder
+        // unklaren Tokens regelmäßig 'error_no_match' / 'error_speech_timeout'.
+        // Mit cancelOnError = true wird dann die ganze Session abgebrochen,
+        // obwohl der User noch spricht. Wir lassen das Plugin selbst
+        // entscheiden und behandeln nur permanente Fehler über onError.
+        cancelOnError: false,
         listenMode: stt.ListenMode.dictation,
       ),
       onResult: (SpeechRecognitionResult r) {
@@ -145,9 +156,10 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
       },
     );
 
-    // Sicherheits-Auto-Stop nach 30 s.
+    // Sicherheits-Auto-Stop nach 32 s (etwas länger als listenFor, falls
+    // das Plugin den Timer nicht selbst feuert).
     _autoStopTimer?.cancel();
-    _autoStopTimer = Timer(const Duration(seconds: 30), () {
+    _autoStopTimer = Timer(const Duration(seconds: 32), () {
       if (_speech.isListening) _stopListening();
     });
   }
