@@ -7,6 +7,7 @@ import '../../shared/models/catch_entry.dart';
 import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
 import '../../shared/widgets/apex_app_bar.dart';
+import '../../shared/widgets/h_scroll_with_hint.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
 import 'catch_detail_screen.dart' show CatchDetailArgs;
 
@@ -716,8 +717,7 @@ class _FilterBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            child: HScrollWithHint(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [

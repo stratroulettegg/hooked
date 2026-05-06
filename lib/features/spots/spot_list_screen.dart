@@ -10,6 +10,7 @@ import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
 import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
+import '../../shared/widgets/h_scroll_with_hint.dart';
 import '../../shared/services/tile_cache_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
@@ -927,8 +928,7 @@ class _SpotFilterBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            child: HScrollWithHint(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
