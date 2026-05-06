@@ -207,6 +207,11 @@ class _ScaffoldWithNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Shell-Scaffold soll nicht auf die Tastatur reagieren \u2013 sonst wird
+      // unter iOS der globale Quick-Add-FAB samt NavBar mit nach oben
+      // geschoben. Die inneren Screens haben ihre eigenen Scaffolds und
+      // k\u00fcmmern sich selbst um Tastatur-Insets.
+      resizeToAvoidBottomInset: false,
       body: navigationShell,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: const AppQuickAddFab(),
