@@ -1714,17 +1714,10 @@ class _CommunityFeedView extends ConsumerWidget {
 
 /// Eine Feed-Seite im Stil der eigenen Detailansicht: Foto als Hero,
 /// halbtransparentes Blur-Sheet mit den Details darüber.
-class _FeedPostPage extends StatefulWidget {
+class _FeedPostPage extends StatelessWidget {
   const _FeedPostPage({required this.post});
 
   final FeedPost post;
-
-  @override
-  State<_FeedPostPage> createState() => _FeedPostPageState();
-}
-
-class _FeedPostPageState extends State<_FeedPostPage> {
-  bool _expanded = false;
 
   String _relativeTime(DateTime when) {
     final diff = DateTime.now().difference(when);
@@ -1737,7 +1730,7 @@ class _FeedPostPageState extends State<_FeedPostPage> {
 
   FishSpecies? _species() {
     for (final s in FishSpecies.values) {
-      if (s.name == widget.post.species) return s;
+      if (s.name == post.species) return s;
     }
     return null;
   }
@@ -1745,219 +1738,192 @@ class _FeedPostPageState extends State<_FeedPostPage> {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    final post = widget.post;
     final species = _species();
     final speciesLabel = species?.displayName ?? post.species;
     final hasPhoto = post.photoUrl != null && post.photoUrl!.isNotEmpty;
+    final hasWater =
+        post.waterBodyName != null && post.waterBodyName!.isNotEmpty;
+    final hasLure = post.lure != null && post.lure!.isNotEmpty;
+    final lureText = hasLure
+        ? (post.lureColor?.isNotEmpty == true
+            ? '${post.lure} · ${post.lureColor}'
+            : post.lure!)
+        : null;
+    final authorName = post.userName?.isNotEmpty == true
+        ? post.userName!
+        : 'Angler:in';
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxH = constraints.maxHeight;
-        // Eingeklappt: gerade so viel, dass Header (Drag-Handle, Spezies/Gewicht,
-        // Meta-Zeile, ggf. Gewässer) sichtbar ist – Bild dominiert den Screen.
-        final hasWater = post.waterBodyName != null &&
-            post.waterBodyName!.isNotEmpty;
-        final collapsedH = hasWater ? 150.0 : 130.0;
-        final expandedH = maxH * 0.85;
-        final sheetH = _expanded ? expandedH : collapsedH;
+    return Stack(
+      children: [
+        // Hero: Netz-Foto oder Fallback-Gradient mit Lexikon-Asset.
+        Positioned.fill(
+          child: _FeedHeroBackdrop(
+            photoUrl: hasPhoto ? post.photoUrl : null,
+            speciesAsset: species?.imageAsset,
+            speciesLabel: speciesLabel,
+          ),
+        ),
 
-        return Stack(
-          children: [
-            // Hero: Netz-Foto oder Fallback-Gradient mit Lexikon-Asset.
-            Positioned.fill(
-              child: _FeedHeroBackdrop(
-                photoUrl: hasPhoto ? post.photoUrl : null,
-                speciesAsset: species?.imageAsset,
-                speciesLabel: speciesLabel,
-              ),
-            ),
-
-            // Floating Blur-Sheet mit Details (rounded top, halbtransparent).
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: sheetH,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(60),
-                        blurRadius: 24,
-                        offset: const Offset(0, -6),
-                      ),
-                    ],
+        // Floating Blur-Sheet — Höhe ergibt sich aus dem Inhalt.
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: ClipRRect(
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(60),
+                    blurRadius: 24,
+                    offset: const Offset(0, -6),
                   ),
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                    child: ColoredBox(
-                      color: c.background.withAlpha(110),
+                ],
+              ),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                child: ColoredBox(
+                  color: c.background.withAlpha(110),
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.fromLTRB(20, 14, 20, 14),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => setState(() => _expanded = !_expanded),
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Center(
-                                    child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 220),
-                                      width: _expanded ? 56 : 40,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: _expanded
-                                            ? ApexColors.primary.withAlpha(180)
-                                            : c.border,
-                                        borderRadius: BorderRadius.circular(2),
+                          // Kopfzeile: Spezies/Gewicht links, Autor rechts.
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        speciesLabel,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: 'Rajdhani',
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.05,
+                                          letterSpacing: 0.3,
+                                          color: c.textPrimary,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      Expanded(
-                                        child: Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.baseline,
-                                          textBaseline:
-                                              TextBaseline.alphabetic,
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                speciesLabel,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  fontFamily: 'Rajdhani',
-                                                  fontSize: 28,
-                                                  fontWeight: FontWeight.w800,
-                                                  height: 1.05,
-                                                  letterSpacing: 0.3,
-                                                  color: c.textPrimary,
-                                                ),
-                                              ),
-                                            ),
-                                            if (post.weightG != null) ...[
-                                              const SizedBox(width: 10),
-                                              Text(
-                                                AppNum.kg(post.weightG!),
-                                                style: const TextStyle(
-                                                  fontFamily: 'Rajdhani',
-                                                  fontSize: 22,
-                                                  color: ApexColors.primary,
-                                                  fontWeight: FontWeight.w800,
-                                                  letterSpacing: 0.2,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
+                                    if (post.weightG != null) ...[
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        AppNum.kg(post.weightG!),
+                                        style: const TextStyle(
+                                          fontFamily: 'Rajdhani',
+                                          fontSize: 20,
+                                          color: ApexColors.primary,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.2,
                                         ),
                                       ),
                                     ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Autor: Avatar + Name + Datum (rechts).
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.center,
+                                children: [
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.end,
                                     children: [
-                                      if (post.lengthCm != null) ...[
-                                        Text(
-                                          '${post.lengthCm!.toStringAsFixed(0)} cm',
-                                          style: TextStyle(
-                                            fontFamily: 'Rajdhani',
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            color: c.textSecondary,
-                                            letterSpacing: 0.3,
-                                          ),
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 140,
                                         ),
-                                        _MetaDotMini(color: c.textMuted),
-                                      ],
-                                      Icon(
-                                        Icons.access_time,
-                                        size: 13,
-                                        color: c.textMuted,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Flexible(
                                         child: Text(
-                                          _relativeTime(post.createdAt),
+                                          authorName,
+                                          textAlign: TextAlign.end,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            fontFamily: 'Rajdhani',
+                                            color: c.textPrimary,
+                                            fontWeight: FontWeight.w700,
                                             fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: c.textSecondary,
-                                            letterSpacing: 0.3,
                                           ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        AppDateFormats.dayMonthYearShort
+                                            .format(post.caughtAt),
+                                        style: TextStyle(
+                                          color: c.textMuted,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  if (post.waterBodyName != null &&
-                                      post.waterBodyName!.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.water,
-                                          size: 13,
-                                          color: c.textMuted,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Flexible(
-                                          child: Text(
-                                            post.waterBodyName!,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontFamily: 'Rajdhani',
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: c.textSecondary,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                  const SizedBox(width: 8),
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: c.border,
+                                    backgroundImage: (post.userPhotoUrl !=
+                                                null &&
+                                            post.userPhotoUrl!.isNotEmpty)
+                                        ? NetworkImage(post.userPhotoUrl!)
+                                        : null,
+                                    child: (post.userPhotoUrl == null ||
+                                            post.userPhotoUrl!.isEmpty)
+                                        ? Icon(Icons.person,
+                                            size: 18, color: c.textMuted)
+                                        : null,
+                                  ),
                                 ],
                               ),
-                            ),
+                            ],
                           ),
-                          Expanded(
-                            child: ListView(
-                              padding: EdgeInsets.zero,
-                              physics: _expanded
-                                  ? const ClampingScrollPhysics()
-                                  : const NeverScrollableScrollPhysics(),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _FeedAuthorRow(post: post),
-                                      const SizedBox(height: 12),
-                                      _FeedDetailsCard(post: post),
-                                      const SizedBox(height: 24),
-                                    ],
-                                  ),
+                          const SizedBox(height: 8),
+                          // Meta-Zeile: Länge · vor X · Gewässer · Köder.
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (post.lengthCm != null)
+                                _metaChip(
+                                  c,
+                                  Icons.straighten,
+                                  '${post.lengthCm!.toStringAsFixed(0)} cm',
                                 ),
-                              ],
-                            ),
+                              _metaChip(
+                                c,
+                                Icons.access_time,
+                                _relativeTime(post.createdAt),
+                              ),
+                              if (hasWater)
+                                _metaChip(
+                                  c,
+                                  Icons.water,
+                                  post.waterBodyName!,
+                                ),
+                              if (hasLure)
+                                _metaChip(
+                                  c,
+                                  Icons.set_meal_outlined,
+                                  lureText!,
+                                ),
+                            ],
                           ),
                         ],
                       ),
@@ -1966,25 +1932,29 @@ class _FeedPostPageState extends State<_FeedPostPage> {
                 ),
               ),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
-}
 
-class _MetaDotMini extends StatelessWidget {
-  const _MetaDotMini({required this.color});
-  final Color color;
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Container(
-        width: 3,
-        height: 3,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      ),
+  Widget _metaChip(ApexColors c, IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: c.textMuted),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontFamily: 'Rajdhani',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: c.textSecondary,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2065,132 +2035,6 @@ class _FallbackHero extends StatelessWidget {
               child: Image.asset(asset!, height: 220, fit: BoxFit.contain),
             )
           : Icon(Icons.image_not_supported, size: 64, color: c.textMuted),
-    );
-  }
-}
-
-class _FeedAuthorRow extends StatelessWidget {
-  const _FeedAuthorRow({required this.post});
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = ApexColors.of(context);
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: c.border,
-          backgroundImage:
-              (post.userPhotoUrl != null && post.userPhotoUrl!.isNotEmpty)
-                  ? NetworkImage(post.userPhotoUrl!)
-                  : null,
-          child: (post.userPhotoUrl == null || post.userPhotoUrl!.isEmpty)
-              ? Icon(Icons.person, size: 20, color: c.textMuted)
-              : null,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                post.userName?.isNotEmpty == true
-                    ? post.userName!
-                    : 'Angler:in',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                AppDateFormats.dayMonthYearHourMinute.format(post.caughtAt),
-                style: TextStyle(color: c.textMuted, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FeedDetailsCard extends StatelessWidget {
-  const _FeedDetailsCard({required this.post});
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = ApexColors.of(context);
-    final items = <(IconData, String, String)>[];
-    if (post.weightG != null) {
-      items.add((Icons.monitor_weight_outlined, 'Gewicht', AppNum.kg(post.weightG!)));
-    }
-    if (post.lengthCm != null) {
-      items.add((Icons.straighten, 'Länge', '${post.lengthCm!.toStringAsFixed(0)} cm'));
-    }
-    if (post.lure != null && post.lure!.isNotEmpty) {
-      final lureText = post.lureColor?.isNotEmpty == true
-          ? '${post.lure} · ${post.lureColor}'
-          : post.lure!;
-      items.add((Icons.set_meal_outlined, 'Köder', lureText));
-    }
-    if (post.waterBodyName != null && post.waterBodyName!.isNotEmpty) {
-      items.add((Icons.water, 'Gewässer', post.waterBodyName!));
-    }
-
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface.withAlpha(180),
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Container(height: 1, color: c.border),
-              ),
-            Row(
-              children: [
-                Icon(items[i].$1, size: 16, color: c.textMuted),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 80,
-                  child: Text(
-                    items[i].$2,
-                    style: TextStyle(
-                      color: c.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.4,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    items[i].$3,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
     );
   }
 }
