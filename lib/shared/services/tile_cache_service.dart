@@ -6,6 +6,23 @@ import 'package:dio_cache_interceptor_hive_store/dio_cache_interceptor_hive_stor
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:path_provider/path_provider.dart';
 
+/// Zentrale URL-Templates für die Carto Basemaps. Enthält den `{r}`-
+/// Platzhalter, damit auf Retina-Displays automatisch die `@2x`-Tiles
+/// geladen werden (statt das Flutter-Map-eigene Retina-Simulating, das
+/// die Tiles unscharf wirken lässt).
+abstract class MapTiles {
+  static const String light =
+      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  static const String dark =
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  static const List<String> subdomains = ['a', 'b', 'c', 'd'];
+  static const String userAgent = 'de.apex.hooked';
+
+  /// Bequemer Helper für Screens: liefert das passende Template je nach
+  /// Theme-Modus.
+  static String urlFor({required bool isDark}) => isDark ? dark : light;
+}
+
 class TileCacheService {
   static TileCacheService? _instance;
   static TileCacheService get instance {
@@ -14,6 +31,7 @@ class TileCacheService {
   }
 
   final HiveCacheStore _store;
+  CachedTileProvider? _provider;
 
   TileCacheService._(this._store);
 
@@ -27,9 +45,22 @@ class TileCacheService {
   }
 
   /// Tile-Provider für TileLayer — bedient gecachte Tiles vom Disk-Cache (30 Tage gültig).
-  CachedTileProvider get provider => CachedTileProvider(
+  ///
+  /// Wird einmalig erzeugt und über alle Karten-Screens geteilt, damit nicht
+  /// pro Rebuild ein neuer Dio-Client/Interceptor entsteht (Verbindungs-Pool-
+  /// Churn → seltene "Tiles laden nicht"-Effekte unter Last).
+  CachedTileProvider get provider => _provider ??= CachedTileProvider(
         store: _store,
         maxStale: const Duration(days: 30),
+        dio: Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 10),
+            headers: const {
+              'User-Agent': 'de.apex.hooked/1.0 (Flutter)',
+            },
+          ),
+        ),
       );
 
   /// Lädt alle Tiles für einen Spot vor (~10–15 MB, Zoom 10–15, ±0.05°).
@@ -57,9 +88,13 @@ class TileCacheService {
 
     int done = 0;
     for (final t in tiles) {
-      final subdomain = ['a', 'b', 'c', 'd'][t.x % 4];
+      final subdomain = MapTiles.subdomains[t.x % MapTiles.subdomains.length];
+      // Wir laden nur die @2x-Variante: deckt Retina-Geräte ab und ist
+      // kompatibel mit dem `{r}`-Platzhalter im Runtime-Template.
+      // Auf Nicht-Retina-Geräten greift der Online-Fallback (oder es wird
+      // auf eine Zoomstufe runter gerendert — Tiles bleiben sichtbar).
       final url =
-          'https://$subdomain.basemaps.cartocdn.com/$style/${t.z}/${t.x}/${t.y}.png';
+          'https://$subdomain.basemaps.cartocdn.com/$style/${t.z}/${t.x}/${t.y}@2x.png';
       try {
         await dio.get<List<int>>(url,
             options: Options(responseType: ResponseType.bytes));

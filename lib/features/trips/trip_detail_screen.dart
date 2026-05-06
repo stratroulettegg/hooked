@@ -616,11 +616,9 @@ class _MapSectionState extends State<_MapSection> {
         ),
         children: [
           TileLayer(
-            urlTemplate: context.isDark
-                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-            subdomains: const ['a', 'b', 'c', 'd'],
-            userAgentPackageName: 'de.apex.hooked',
+            urlTemplate: MapTiles.urlFor(isDark: context.isDark),
+            subdomains: MapTiles.subdomains,
+            userAgentPackageName: MapTiles.userAgent,
             retinaMode: MediaQuery.devicePixelRatioOf(context) > 1.5,
             tileProvider: TileCacheService.instance.provider,
           ),
