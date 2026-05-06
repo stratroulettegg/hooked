@@ -1,7 +1,11 @@
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { logger } from "firebase-functions/v2";
+import vision from "@google-cloud/vision";
 
 initializeApp();
 
@@ -169,7 +173,32 @@ export const onReportCreated = onDocumentCreated(
   },
 );
 
-// ── onPostCreated: Rate-Limit ─────────────────────────────────────────────
+// ── onPostCreated: Identity-Override + Rate-Limit ───────────────────────
+
+async function overwriteIdentity(
+  ref: FirebaseFirestore.DocumentReference,
+  userId: string,
+  current: { userName?: unknown; userPhotoUrl?: unknown },
+): Promise<void> {
+  // Server-seitig die Anzeigedaten aus Firebase Auth durchsetzen, damit
+  // niemand fremde Namen/Avatare in den Feed schmuggeln kann.
+  try {
+    const user = await getAuth().getUser(userId);
+    const trusted = {
+      userName: user.displayName ?? null,
+      userPhotoUrl: user.photoURL ?? null,
+    };
+    if (
+      trusted.userName === (current.userName ?? null) &&
+      trusted.userPhotoUrl === (current.userPhotoUrl ?? null)
+    ) {
+      return;
+    }
+    await ref.set(trusted, { merge: true });
+  } catch (e) {
+    logger.warn("Identity overwrite failed", { userId, error: String(e) });
+  }
+}
 
 export const onPostCreated = onDocumentCreated(
   { document: "feed/{postId}", database: DATABASE_ID },
@@ -177,6 +206,14 @@ export const onPostCreated = onDocumentCreated(
     const data = event.data?.data();
     const userId = data?.userId as string | undefined;
     if (!userId) return;
+
+    if (event.data) {
+      await overwriteIdentity(event.data.ref, userId, {
+        userName: data?.userName,
+        userPhotoUrl: data?.userPhotoUrl,
+      });
+    }
+
     if (await isOverLimit(userId, "posts", POSTS_PER_HOUR)) {
       logger.warn("Post rate-limit hit – deleting", { userId, postId: event.params.postId });
       await event.data?.ref.delete().catch(() => undefined);
@@ -184,7 +221,7 @@ export const onPostCreated = onDocumentCreated(
   },
 );
 
-// ── onCommentCreated: Rate-Limit ──────────────────────────────────────────
+// ── onCommentCreated: Identity-Override + Rate-Limit ────────────────────
 
 export const onCommentCreated = onDocumentCreated(
   { document: "feed/{postId}/comments/{commentId}", database: DATABASE_ID },
@@ -192,6 +229,14 @@ export const onCommentCreated = onDocumentCreated(
     const data = event.data?.data();
     const userId = data?.userId as string | undefined;
     if (!userId) return;
+
+    if (event.data) {
+      await overwriteIdentity(event.data.ref, userId, {
+        userName: data?.userName,
+        userPhotoUrl: data?.userPhotoUrl,
+      });
+    }
+
     if (await isOverLimit(userId, "comments", COMMENTS_PER_HOUR)) {
       logger.warn("Comment rate-limit hit – deleting", {
         userId,
@@ -206,6 +251,100 @@ export const onCommentCreated = onDocumentCreated(
         .update({ commentCount: FieldValue.increment(-1) })
         .catch(() => undefined);
     }
+  },
+);
+
+// ── onPhotoUploaded: SafeSearch ─────────────────────────────────────────
+
+// SafeSearch-Likelihood-Levels: VERY_UNLIKELY < UNLIKELY < POSSIBLE < LIKELY
+// < VERY_LIKELY. Wir sind beim "violence"-Score absichtlich tolerant
+// (blutende Fische triggern "violence" häufig false-positiv) und blocken
+// nur bei adult oder racy mit hoher Konfidenz.
+const LIKELIHOOD_RANK: Record<string, number> = {
+  UNKNOWN: 0,
+  VERY_UNLIKELY: 1,
+  UNLIKELY: 2,
+  POSSIBLE: 3,
+  LIKELY: 4,
+  VERY_LIKELY: 5,
+};
+
+function shouldBlock(annotation: {
+  adult?: string | null;
+  racy?: string | null;
+  medical?: string | null;
+}): { block: boolean; reason: string } {
+  const adult = LIKELIHOOD_RANK[annotation.adult ?? "UNKNOWN"] ?? 0;
+  const racy = LIKELIHOOD_RANK[annotation.racy ?? "UNKNOWN"] ?? 0;
+  const medical = LIKELIHOOD_RANK[annotation.medical ?? "UNKNOWN"] ?? 0;
+  if (adult >= 4) return { block: true, reason: "adult" };
+  if (racy >= 5) return { block: true, reason: "racy" };
+  if (medical >= 5) return { block: true, reason: "medical" };
+  return { block: false, reason: "" };
+}
+
+const visionClient = new vision.ImageAnnotatorClient();
+
+export const onPhotoUploaded = onObjectFinalized(
+  { region: "europe-west3" },
+  async (event) => {
+    const filePath = event.data.name;
+    if (!filePath || !filePath.startsWith("feedPhotos/")) return;
+
+    // feedPhotos/{userId}/{postId}.jpg
+    const parts = filePath.split("/");
+    if (parts.length < 3) return;
+    const filename = parts[parts.length - 1];
+    const postId = filename.replace(/\.[^.]+$/, "");
+    if (!postId) return;
+
+    let safeSearch;
+    try {
+      const [result] = await visionClient.safeSearchDetection(
+        `gs://${event.data.bucket}/${filePath}`,
+      );
+      safeSearch = result.safeSearchAnnotation;
+    } catch (e) {
+      logger.error("SafeSearch failed", { filePath, error: String(e) });
+      return;
+    }
+    if (!safeSearch) return;
+
+    const { block, reason } = shouldBlock({
+      adult: safeSearch.adult as string | null | undefined,
+      racy: safeSearch.racy as string | null | undefined,
+      medical: safeSearch.medical as string | null | undefined,
+    });
+    logger.info("SafeSearch result", {
+      postId,
+      adult: safeSearch.adult,
+      racy: safeSearch.racy,
+      medical: safeSearch.medical,
+      violence: safeSearch.violence,
+      block,
+    });
+    if (!block) return;
+
+    await db
+      .collection("feed")
+      .doc(postId)
+      .set(
+        {
+          hidden: true,
+          hiddenReason: `safesearch_${reason}`,
+          hiddenAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+      .catch((e) => logger.error("Hide post failed", e));
+
+    await getStorage()
+      .bucket(event.data.bucket)
+      .file(filePath)
+      .delete({ ignoreNotFound: true })
+      .catch((e) => logger.error("Delete photo failed", e));
+
+    logger.warn("Post hidden by SafeSearch", { postId, reason });
   },
 );
 
