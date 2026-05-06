@@ -522,12 +522,20 @@ class _SpotCard extends ConsumerWidget {
     final catchCount = spotCatches.length;
     final isHotspot = catchCount >= _hotspotThreshold;
 
+    // Rechte Card-Ecken während des Swipes eckig.
+    final swiping = SwipeAffordance.of(context);
+    final cardRadius = swiping
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+          )
+        : BorderRadius.circular(18);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: cardRadius,
           border: Border.all(
             color: isHotspot ? ApexColors.scoreMid.withAlpha(160) : c.border,
             width: isHotspot ? 1.6 : 1,
@@ -545,7 +553,7 @@ class _SpotCard extends ConsumerWidget {
                 ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: cardRadius,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

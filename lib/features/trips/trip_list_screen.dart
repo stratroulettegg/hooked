@@ -238,7 +238,13 @@ class _TripCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: c.surface,
-            borderRadius: BorderRadius.circular(16),
+            // Rechte Ecken während Swipe eckig.
+            borderRadius: SwipeAffordance.of(context)
+                ? const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  )
+                : BorderRadius.circular(16),
             border: Border.all(color: c.border),
             boxShadow: context.isDark
                 ? []

@@ -101,7 +101,33 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
       onDismissed: (_) async {
         await widget.onDelete();
       },
-      child: ClipRRect(borderRadius: clipShape, child: widget.child),
+      child: SwipeAffordance(
+        active: _swiping,
+        child: ClipRRect(borderRadius: clipShape, child: widget.child),
+      ),
     );
   }
+}
+
+/// Signalisiert Kindern, ob die enthaltende Kachel gerade gewischt wird.
+///
+/// Karten lesen das, um ihre eigenen rechten Ecken eckig zu machen — sonst
+/// stehen die runden Ecken vor dem roten Hintergrund und erzeugen Lücken.
+class SwipeAffordance extends InheritedWidget {
+  const SwipeAffordance({
+    super.key,
+    required this.active,
+    required super.child,
+  });
+
+  final bool active;
+
+  static bool of(BuildContext context) {
+    final w = context.dependOnInheritedWidgetOfExactType<SwipeAffordance>();
+    return w?.active ?? false;
+  }
+
+  @override
+  bool updateShouldNotify(SwipeAffordance oldWidget) =>
+      oldWidget.active != active;
 }

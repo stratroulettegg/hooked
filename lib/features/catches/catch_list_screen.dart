@@ -1048,12 +1048,21 @@ class _CatchCard extends ConsumerWidget {
         : null;
     final hasPhoto = AppPaths.photoFile(entry.photoPath) != null;
 
+    // Rechte Card-Ecken werden während des Swipes eckig — sonst stehen
+    // sie vor dem roten Lösch-Feld und erzeugen Eck-Lücken.
+    final swiping = SwipeAffordance.of(context);
+    final cardRadius = swiping
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+          )
+        : BorderRadius.circular(18);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: cardRadius,
           border: Border.all(
             color: isPB ? ApexColors.scoreMid.withAlpha(160) : c.border,
             width: isPB ? 1.6 : 1,
@@ -1071,7 +1080,7 @@ class _CatchCard extends ConsumerWidget {
                 ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: cardRadius,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
