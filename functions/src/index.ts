@@ -11,12 +11,12 @@ const db = getFirestore(DATABASE_ID);
 // ── Konfiguration ──────────────────────────────────────────────────────────
 // Anzahl unterschiedlicher Reporter, ab der ein Inhalt automatisch
 // versteckt wird.
-const AUTO_HIDE_THRESHOLD = 3;
+const AUTO_HIDE_THRESHOLD = 5;
 
 // Sliding-Window-Limits pro User pro Stunde.
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1h
-const POSTS_PER_HOUR = 5;
-const COMMENTS_PER_HOUR = 30;
+const POSTS_PER_HOUR = 20;
+const COMMENTS_PER_HOUR = 60;
 const REPORTS_PER_HOUR = 20;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
