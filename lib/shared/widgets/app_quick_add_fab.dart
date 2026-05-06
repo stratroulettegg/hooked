@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../features/catches/voice/voice_quick_add_sheet.dart';
@@ -79,6 +80,10 @@ class _AppQuickAddFabState extends State<AppQuickAddFab>
           await _closeAnimated();
           if (mounted) VoiceQuickAddSheet.show(context);
         },
+        onAiTap: () async {
+          await _closeAnimated();
+          if (mounted) context.push('/catches/add');
+        },
       ),
     );
     Overlay.of(context, rootOverlay: true).insert(_entry!);
@@ -138,6 +143,7 @@ class _FabFanOverlay extends StatelessWidget {
     required this.onScrimTap,
     required this.onListTap,
     required this.onMicTap,
+    required this.onAiTap,
   });
 
   final Animation<double> animation;
@@ -147,6 +153,7 @@ class _FabFanOverlay extends StatelessWidget {
   final VoidCallback onScrimTap;
   final VoidCallback onListTap;
   final VoidCallback onMicTap;
+  final VoidCallback onAiTap;
 
   @override
   Widget build(BuildContext context) {
@@ -158,10 +165,12 @@ class _FabFanOverlay extends StatelessWidget {
             Curves.easeOutBack.transform(animation.value.clamp(0.0, 1.0));
         final scrimAlpha =
             (animation.value * 130).clamp(0.0, 130.0).toInt();
-        final dxLeft = -math.cos(math.pi / 4) * satRadius * t;
-        final dyUp = -math.sin(math.pi / 4) * satRadius * t;
-        final leftPos = Offset(anchor.dx + dxLeft, anchor.dy + dyUp);
-        final rightPos = Offset(anchor.dx - dxLeft, anchor.dy + dyUp);
+        // Drei Positionen: links (135°), mitte (90° = direkt oben), rechts (45°)
+        final dxDiag = math.cos(math.pi / 4) * satRadius * t;
+        final dyDiag = math.sin(math.pi / 4) * satRadius * t;
+        final leftPos  = Offset(anchor.dx - dxDiag, anchor.dy - dyDiag);
+        final centerPos = Offset(anchor.dx, anchor.dy - satRadius * t);
+        final rightPos = Offset(anchor.dx + dxDiag, anchor.dy - dyDiag);
         return SizedBox(
           width: media.size.width,
           height: media.size.height,
@@ -184,6 +193,16 @@ class _FabFanOverlay extends StatelessWidget {
                 background: ApexColors.primary,
                 foreground: Colors.white,
                 onTap: onListTap,
+              ),
+              _FabSatellite(
+                center: centerPos,
+                size: satSize,
+                scale: t.clamp(0.0, 1.0),
+                opacity: animation.value.clamp(0.0, 1.0),
+                icon: Icons.auto_awesome,
+                background: ApexColors.strike,
+                foreground: Colors.white,
+                onTap: onAiTap,
               ),
               _FabSatellite(
                 center: rightPos,
