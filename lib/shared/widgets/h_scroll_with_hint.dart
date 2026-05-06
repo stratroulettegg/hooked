@@ -77,12 +77,12 @@ class _HScrollWithHintState extends State<HScrollWithHint> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 28,
+                    width: 40,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           c.surface.withAlpha(0),
-                          c.surface.withAlpha(220),
+                          c.surface,
                         ],
                       ),
                     ),
@@ -124,11 +124,11 @@ class _HScrollWithHintState extends State<HScrollWithHint> {
                       ),
                     ),
                     Container(
-                      width: 28,
+                      width: 40,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            c.surface.withAlpha(220),
+                            c.surface,
                             c.surface.withAlpha(0),
                           ],
                         ),
