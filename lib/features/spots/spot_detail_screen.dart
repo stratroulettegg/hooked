@@ -712,58 +712,62 @@ class _SpeciesChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: c.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              species.emoji,
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(width: 5),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 110),
-              child: Text(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: c.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                species.emoji,
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(width: 6),
+              Text(
                 species.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: 'Rajdhani',
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
+                  letterSpacing: 0.3,
                   color: c.textPrimary,
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: ApexColors.primary,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Text(
-                '$count',
-                style: const TextStyle(
-                  fontFamily: 'Rajdhani',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black,
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: ApexColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    fontFamily: 'Rajdhani',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black,
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: c.textMuted,
+              ),
+            ],
+          ),
         ),
       ),
     );
