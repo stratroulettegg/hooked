@@ -30,6 +30,10 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
   _CatchSort _sort = _CatchSort.dateDesc;
   bool _twoColumns = false;
   int _tab = 0; // 0 = Meine, 1 = Community
+  /// Wenn gesetzt, springt der Community-Feed beim Öffnen direkt auf
+  /// diesen Post. Wird nach einem Sprung auf null gesetzt, damit ein
+  /// erneuter Tab-Wechsel oben startet.
+  String? _focusPostId;
 
   /// Persönliche Rekord-IDs (pro Art jeweils der schwerste, ersatzweise längste).
   Set<String> _personalBestIds(List<CatchEntry> all) {
@@ -45,6 +49,17 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
       if (newScore > curScore) bestPerSpecies[e.species] = e;
     }
     return bestPerSpecies.values.map((e) => e.id).toSet();
+  }
+
+  /// Wechselt auf den Community-Tab und scrollt direkt zu `postId`.
+  void _jumpToFeed(String postId) {
+    setState(() {
+      _focusPostId = postId;
+      _tab = 1;
+    });
+    // Direkt nach dem Tab-Wechsel den Feed neu abonnieren – verhindert
+    // permission-denied direkt nach Login.
+    ref.invalidate(feedPostsProvider);
   }
 
   /// Trend-Berechnung: Anzahl Fänge im aktuellen Monat vs. Vormonat.
@@ -75,12 +90,15 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 tooltip: 'Zurück zu „Meine"',
-                onPressed: () => setState(() => _tab = 0),
+                onPressed: () => setState(() {
+                  _tab = 0;
+                  _focusPostId = null;
+                }),
               ),
             )
           : const ApexAppBar(),
       body: _tab == 1
-          ? const _CommunityFeedView()
+          ? _CommunityFeedView(initialPostId: _focusPostId)
           : Column(
               children: [
                 Padding(
@@ -88,7 +106,14 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                   child: _FeedTabSwitch(
                     value: _tab,
                     onChanged: (i) {
-                      setState(() => _tab = i);
+                      setState(() {
+                        _tab = i;
+                        if (i == 1 && _focusPostId == null) {
+                          // regulärer Switch ohne Sprung-Wunsch
+                        } else if (i == 0) {
+                          _focusPostId = null;
+                        }
+                      });
                       // Beim Wechsel auf Community immer neu laden,
                       // damit der Stream sicher neu auf die Auth-Lage greift.
                       if (i == 1) {
@@ -233,6 +258,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                             entry: filtered[i],
                             isPB: pbIds.contains(filtered[i].id),
                             compact: true,
+                            onJumpToFeed: _jumpToFeed,
                             onTap: () => context.push(
                               '/catches/detail',
                               extra: CatchDetailArgs(
@@ -258,6 +284,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                               child: _CatchCard(
                                 entry: filtered[i],
                                 isPB: pbIds.contains(filtered[i].id),
+                                onJumpToFeed: _jumpToFeed,
                                 onTap: () => context.push(
                                   '/catches/detail',
                                   extra: CatchDetailArgs(
@@ -333,6 +360,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                     entry: group.entries[i],
                     isPB: pbIds.contains(group.entries[i].id),
                     compact: true,
+                    onJumpToFeed: _jumpToFeed,
                     onTap: () => context.push(
                       '/catches/detail',
                       extra: CatchDetailArgs(
@@ -357,6 +385,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                       child: _CatchCard(
                         entry: group.entries[i],
                         isPB: pbIds.contains(group.entries[i].id),
+                        onJumpToFeed: _jumpToFeed,
                         onTap: () => context.push(
                           '/catches/detail',
                           extra: CatchDetailArgs(
@@ -1078,11 +1107,16 @@ class _CatchCard extends ConsumerWidget {
     required this.onTap,
     this.isPB = false,
     this.compact = false,
+    this.onJumpToFeed,
   });
   final CatchEntry entry;
   final VoidCallback onTap;
   final bool isPB;
   final bool compact;
+
+  /// Aufruf, wenn der User auf das Geteilt-Badge tippt → springt im
+  /// Community-Feed direkt zu diesem Post.
+  final ValueChanged<String>? onJumpToFeed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1229,11 +1263,28 @@ class _CatchCard extends ConsumerWidget {
                       Positioned(
                         top: 10,
                         left: 10,
-                        child: _SharedBadge(
-                          post: post,
-                          newLikes: newLikes,
-                          newComments: newComments,
-                          hasNews: hasNews,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: post == null || onJumpToFeed == null
+                              ? null
+                              : () {
+                                  // Vor dem Sprung den aktuellen Stand
+                                  // als gesehen markieren.
+                                  ref
+                                      .read(feedSeenProvider.notifier)
+                                      .markSeen(
+                                        post.id,
+                                        post.likeCount,
+                                        post.commentCount,
+                                      );
+                                  onJumpToFeed!(post.id);
+                                },
+                          child: _SharedBadge(
+                            post: post,
+                            newLikes: newLikes,
+                            newComments: newComments,
+                            hasNews: hasNews,
+                          ),
                         ),
                       )
                     else if (!hasPhoto)
@@ -1609,11 +1660,29 @@ class _FeedTabSwitch extends StatelessWidget {
 }
 
 /// Zeigt den globalen Community-Feed.
-class _CommunityFeedView extends ConsumerWidget {
-  const _CommunityFeedView();
+class _CommunityFeedView extends ConsumerStatefulWidget {
+  const _CommunityFeedView({this.initialPostId});
+
+  /// Wenn gesetzt, springt der Pager beim ersten Render zu diesem Post.
+  final String? initialPostId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CommunityFeedView> createState() =>
+      _CommunityFeedViewState();
+}
+
+class _CommunityFeedViewState extends ConsumerState<_CommunityFeedView> {
+  PageController? _pager;
+  bool _didJump = false;
+
+  @override
+  void dispose() {
+    _pager?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = ApexColors.of(context);
     final user = ref.watch(currentUserProvider);
     if (user == null) {
@@ -1738,7 +1807,34 @@ class _CommunityFeedView extends ConsumerWidget {
           );
         }
         // Vertikaler Vollbild-Pager – analog zur Catch-Detail-Ansicht.
+        // Wenn ein initialPostId übergeben wurde, springt der Pager dorthin
+        // (entweder direkt beim ersten Build oder per animateTo, sobald die
+        // Posts eingetroffen sind).
+        final initialIdx = widget.initialPostId == null
+            ? 0
+            : posts.indexWhere((p) => p.id == widget.initialPostId);
+        final startIdx = initialIdx < 0 ? 0 : initialIdx;
+        _pager ??= PageController(initialPage: startIdx);
+        if (!_didJump &&
+            widget.initialPostId != null &&
+            initialIdx >= 0) {
+          _didJump = true;
+          // Falls Posts erst später eintreffen (Stream): nach dem Build
+          // noch sanft hinscrollen.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final p = _pager;
+            if (p != null && p.hasClients) {
+              p.animateToPage(
+                startIdx,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+              );
+            }
+          });
+        }
         return PageView.builder(
+          controller: _pager,
           scrollDirection: Axis.vertical,
           itemCount: posts.length,
           itemBuilder: (_, i) => _FeedPostPage(post: posts[i]),
