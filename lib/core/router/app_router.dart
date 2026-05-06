@@ -211,6 +211,8 @@ class _ScaffoldWithNavBar extends StatelessWidget {
     // hochschieben (h\u00e4sslich auf iOS) \u2013 und wenn wir den Resize
     // ausschalten, gibt es einen schwarzen Balken hinter der Tastatur.
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    const dur = Duration(milliseconds: 220);
+    const curve = Curves.easeOutCubic;
     return Scaffold(
       // Tap auf den Hintergrund (au\u00dferhalb von Eingabefeldern) schlie\u00dft
       // die Tastatur \u2013 sonst bleibt sie auf iOS h\u00e4ngen, weil iOS keine
@@ -221,17 +223,31 @@ class _ScaffoldWithNavBar extends StatelessWidget {
         child: navigationShell,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton:
-          keyboardOpen ? null : const AppQuickAddFab(),
-      bottomNavigationBar: keyboardOpen
-          ? null
-          : _CenterDockedNavBar(
-              currentIndex: navigationShell.currentIndex,
-              onTap: (i) => navigationShell.goBranch(
-                i,
-                initialLocation: i == navigationShell.currentIndex,
+      floatingActionButton: AnimatedScale(
+        duration: dur,
+        curve: curve,
+        scale: keyboardOpen ? 0.0 : 1.0,
+        child: AnimatedOpacity(
+          duration: dur,
+          curve: curve,
+          opacity: keyboardOpen ? 0.0 : 1.0,
+          child: const AppQuickAddFab(),
+        ),
+      ),
+      bottomNavigationBar: AnimatedSize(
+        duration: dur,
+        curve: curve,
+        alignment: Alignment.topCenter,
+        child: keyboardOpen
+            ? const SizedBox.shrink()
+            : _CenterDockedNavBar(
+                currentIndex: navigationShell.currentIndex,
+                onTap: (i) => navigationShell.goBranch(
+                  i,
+                  initialLocation: i == navigationShell.currentIndex,
+                ),
               ),
-            ),
+      ),
     );
   }
 }
