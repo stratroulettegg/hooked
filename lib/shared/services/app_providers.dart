@@ -626,11 +626,6 @@ class _MissionService {
               )
               .length;
           await notifier.updateProgress(m.id, count);
-        case 'season_cold_water':
-          if (entry.waterTempC != null && entry.waterTempC! < 6) {
-            await notifier.updateProgress(m.id, 1);
-          }
-
         // ─── Achievements ──────────────────────────────────────────────────
         case 'ach_micro_jig':
           if (entry.species == FishSpecies.barsch &&
@@ -873,17 +868,6 @@ class _MissionService {
           await notifier.updateProgress(m.id, colors);
 
         // ─── Seasonal Extra 2 ──────────────────────────────────────────────
-        case 'season_ice_warrior':
-          final n = catches
-              .where(
-                (c) => _isThisSeason(c.caughtAt) && (c.waterTempC ?? 99) < 4,
-              )
-              .length;
-          await notifier.updateProgress(m.id, n);
-        case 'season_summer_heat':
-          if (_isThisSeason(entry.caughtAt) && (entry.waterTempC ?? 0) > 22) {
-            await notifier.updateProgress(m.id, 1);
-          }
         case 'season_all_weekdays':
           final weekdays = catches
               .where((c) => _isThisSeason(c.caughtAt))
