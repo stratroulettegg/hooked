@@ -206,15 +206,16 @@ class _ScaffoldWithNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // FAB ausblenden, wenn die Tastatur offen ist \u2013 sonst klebt er
+    // unter iOS direkt \u00fcber der Tastatur und verdeckt Eingabefelder.
+    // Den Scaffold sonst normal resizen lassen, damit kein schwarzer
+    // Balken zwischen Body und Tastatur entsteht.
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
-      // Shell-Scaffold soll nicht auf die Tastatur reagieren \u2013 sonst wird
-      // unter iOS der globale Quick-Add-FAB samt NavBar mit nach oben
-      // geschoben. Die inneren Screens haben ihre eigenen Scaffolds und
-      // k\u00fcmmern sich selbst um Tastatur-Insets.
-      resizeToAvoidBottomInset: false,
       body: navigationShell,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: const AppQuickAddFab(),
+      floatingActionButton:
+          keyboardOpen ? null : const AppQuickAddFab(),
       bottomNavigationBar: _CenterDockedNavBar(
         currentIndex: navigationShell.currentIndex,
         onTap: (i) => navigationShell.goBranch(
