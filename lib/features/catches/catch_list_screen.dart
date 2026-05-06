@@ -2025,6 +2025,9 @@ class _FeedPostPage extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      // Über dem Root-Navigator anzeigen, damit das Sheet auch
+      // den globalen FAB („+"-Quick-Add) überdeckt.
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _FeedCommentsSheet(postId: postId),
     );
