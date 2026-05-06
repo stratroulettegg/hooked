@@ -223,13 +223,15 @@ class _ScaffoldWithNavBar extends StatelessWidget {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton:
           keyboardOpen ? null : const AppQuickAddFab(),
-      bottomNavigationBar: _CenterDockedNavBar(
-        currentIndex: navigationShell.currentIndex,
-        onTap: (i) => navigationShell.goBranch(
-          i,
-          initialLocation: i == navigationShell.currentIndex,
-        ),
-      ),
+      bottomNavigationBar: keyboardOpen
+          ? null
+          : _CenterDockedNavBar(
+              currentIndex: navigationShell.currentIndex,
+              onTap: (i) => navigationShell.goBranch(
+                i,
+                initialLocation: i == navigationShell.currentIndex,
+              ),
+            ),
     );
   }
 }
