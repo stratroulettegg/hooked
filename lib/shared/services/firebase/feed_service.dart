@@ -141,16 +141,30 @@ class FeedService {
     if (!FirebaseBootstrap.isAvailable) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    // Erst prüfen, ob ein Foto hochgeladen wurde – dann unnötige 404er
+    // beim Storage-Delete vermeiden.
+    bool hadPhoto = false;
+    try {
+      final doc = await _db.collection('feed').doc(catchId).get();
+      hadPhoto = (doc.data()?['photoUrl'] as String?)?.isNotEmpty ?? false;
+    } catch (_) {
+      // Doc existiert evtl. gar nicht mehr – dann auch kein Foto zu löschen.
+    }
+
     try {
       await _db.collection('feed').doc(catchId).delete();
     } catch (_) {}
-    try {
-      await FirebaseStorage.instance
-          .ref()
-          .child('feedPhotos/${user.uid}/$catchId.jpg')
-          .delete();
-    } catch (_) {
-      // war evtl. nie hochgeladen
+
+    if (hadPhoto) {
+      try {
+        await FirebaseStorage.instance
+            .ref()
+            .child('feedPhotos/${user.uid}/$catchId.jpg')
+            .delete();
+      } catch (_) {
+        // Best-effort: Foto evtl. schon weg.
+      }
     }
   }
 
