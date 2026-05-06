@@ -464,6 +464,7 @@ Future<void> _redeemInviteDialog(BuildContext context, WidgetRef ref) async {
         FilledButton(
           onPressed: () {
             final t = TripCloudShareService.extractToken(controller.text);
+            FocusScope.of(ctx).unfocus();
             Navigator.pop(ctx, t);
           },
           child: const Text('Einlösen'),

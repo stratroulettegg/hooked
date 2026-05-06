@@ -227,7 +227,10 @@ class WaterDaysScreen extends ConsumerWidget {
           FilledButton(
             onPressed: () {
               final v = int.tryParse(ctrl.text);
-              if (v != null && v > 0) Navigator.pop(ctx, v);
+              if (v != null && v > 0) {
+                FocusScope.of(ctx).unfocus();
+                Navigator.pop(ctx, v);
+              }
             },
             child: const Text('Speichern'),
           ),

@@ -324,7 +324,10 @@ class _WaterSearchSheetState extends State<WaterSearchSheet> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        FocusScope.of(context).unfocus();
+                        Navigator.of(context).pop();
+                      },
                       tooltip: 'Schließen',
                     ),
                   ],
@@ -389,7 +392,10 @@ class _WaterSearchSheetState extends State<WaterSearchSheet> {
                                 color: c.textMuted,
                               ),
                             ),
-                            onTap: () => Navigator.of(context).pop(r),
+                            onTap: () {
+                              FocusScope.of(context).unfocus();
+                              Navigator.of(context).pop(r);
+                            },
                           );
                         },
                       ),

@@ -201,10 +201,13 @@ class _AddEditTripScreenState extends ConsumerState<AddEditTripScreen> {
             child: const Text('Abbrechen'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(
-              ctx,
-              ctrl.text.trim().isEmpty ? suggested : ctrl.text.trim(),
-            ),
+            onPressed: () {
+              FocusScope.of(ctx).unfocus();
+              Navigator.pop(
+                ctx,
+                ctrl.text.trim().isEmpty ? suggested : ctrl.text.trim(),
+              );
+            },
             child: const Text('OK'),
           ),
         ],
