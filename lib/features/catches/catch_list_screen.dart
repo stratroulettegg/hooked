@@ -1789,8 +1789,11 @@ class _FeedPostPage extends StatelessWidget {
                   child: SafeArea(
                     top: false,
                     child: Padding(
+                      // Bottom-Padding so groß, dass der zentrierte
+                      // Quick-Add-FAB den Inhalt (z. B. Gewässername)
+                      // nicht überdeckt.
                       padding:
-                          const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                          const EdgeInsets.fromLTRB(20, 14, 20, 56),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
