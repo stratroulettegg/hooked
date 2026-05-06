@@ -115,6 +115,13 @@ final blockedUidsProvider = StreamProvider<Set<String>>((ref) {
   return _moderationService.watchBlockedUids();
 });
 
+/// Stream der Server-seitigen Rate-Limit-Treffer (Cloud Functions).
+/// Die UI lauscht hier, um eine Snackbar zu zeigen, wenn der eigene
+/// User durch Posts/Kommentare/Reports den 1h-Schwellwert \u00fcberschreitet.
+final rateLimitHitsProvider = StreamProvider<RateLimitHit?>((ref) {
+  return _moderationService.watchRateLimitHits();
+});
+
 /// Stream der aktuellsten Community-Feed-Posts (gemeinsame Quelle f\u00fcr alle UIs).
 /// Posts von blockierten Nutzern und auto-versteckte Posts (`hidden=true`)
 /// werden client-seitig herausgefiltert.

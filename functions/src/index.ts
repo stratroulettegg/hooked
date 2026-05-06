@@ -41,7 +41,15 @@ async function isOverLimit(
       (ts) => ts > cutoff,
     );
     if (arr.length >= limit) {
-      tx.set(ref, { [key]: arr }, { merge: true });
+      tx.set(
+        ref,
+        {
+          [key]: arr,
+          lastBlockedKind: key,
+          lastBlockedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
       return true;
     }
     arr.push(now);

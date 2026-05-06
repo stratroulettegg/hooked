@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/catches/catch_list_screen.dart';
 import '../../features/catches/add_edit_catch_screen.dart';
@@ -24,6 +25,8 @@ import '../../features/onboarding/onboarding_screen.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
 import '../../shared/models/trip.dart';
+import '../../shared/services/app_providers.dart';
+import '../../shared/services/firebase/moderation_service.dart';
 import '../../shared/services/onboarding_service.dart';
 import '../../shared/widgets/app_quick_add_fab.dart';
 import '../theme/app_theme.dart';
@@ -200,12 +203,56 @@ final appRouter = GoRouter(
   ],
 );
 
-class _ScaffoldWithNavBar extends StatelessWidget {
+class _ScaffoldWithNavBar extends ConsumerStatefulWidget {
   const _ScaffoldWithNavBar({required this.navigationShell});
   final StatefulNavigationShell navigationShell;
 
   @override
+  ConsumerState<_ScaffoldWithNavBar> createState() =>
+      _ScaffoldWithNavBarState();
+}
+
+class _ScaffoldWithNavBarState extends ConsumerState<_ScaffoldWithNavBar> {
+  DateTime? _lastShownHitAt;
+
+  void _handleRateLimitHit(RateLimitHit? hit) {
+    if (hit == null) return;
+    // Nur zeigen, wenn seit letztem Snackbar mind. 1s vergangen ist und
+    // der Hit erst kürzlich passiert ist (max 30s alt) – sonst zeigt sich
+    // beim App-Start jeder alte Eintrag als "frisch" an.
+    if (_lastShownHitAt == hit.at) return;
+    if (DateTime.now().toUtc().difference(hit.at.toUtc()).inSeconds.abs() > 30) {
+      return;
+    }
+    _lastShownHitAt = hit.at;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    final msg = switch (hit.kind) {
+      'posts' =>
+        'Du hast in der letzten Stunde sehr viele Fänge geteilt. '
+            'Versuch es später nochmal – dein letzter Beitrag wurde nicht veröffentlicht.',
+      'comments' =>
+        'Du kommentierst gerade sehr viel. Bitte mach eine kurze Pause – '
+            'dein letzter Kommentar wurde nicht gespeichert.',
+      'reports' =>
+        'Du hast in der letzten Stunde viele Meldungen abgesendet. '
+            'Bitte warte etwas, bevor du weitere Meldungen erstellst.',
+      _ => 'Du hast ein Limit erreicht. Versuch es später nochmal.',
+    };
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 6),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<RateLimitHit?>>(rateLimitHitsProvider, (prev, next) {
+      next.whenData(_handleRateLimitHit);
+    });
+    final navigationShell = widget.navigationShell;
     // Wenn die Tastatur offen ist, blenden wir NavBar und FAB komplett
     // aus. Sonst w\u00fcrde der Scaffold-Resize beide \u00fcber die Tastatur
     // hochschieben (h\u00e4sslich auf iOS) \u2013 und wenn wir den Resize

@@ -145,4 +145,37 @@ class ModerationService {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+  // \u2500\u2500 Rate-Limit-Hinweise (vom Server gesetzt) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+  /// Stream der Rate-Limit-Hinweise f\u00fcr den eingeloggten User.
+  /// Liefert (kind, atMs) sobald der Server das Limit f\u00fcr den User
+  /// blockiert hat. Wird vom Client genutzt, um eine Snackbar
+  /// anzuzeigen.
+  Stream<RateLimitHit?> watchRateLimitHits() {
+    if (!FirebaseBootstrap.isAvailable) {
+      return Stream<RateLimitHit?>.value(null);
+    }
+    return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+      if (user == null) return Stream<RateLimitHit?>.value(null);
+      return _db
+          .collection('userMeta')
+          .doc(user.uid)
+          .snapshots()
+          .map<RateLimitHit?>((snap) {
+            final data = snap.data();
+            if (data == null) return null;
+            final kind = data['lastBlockedKind'] as String?;
+            final ts = data['lastBlockedAt'];
+            if (kind == null || ts is! Timestamp) return null;
+            return RateLimitHit(kind: kind, at: ts.toDate());
+          })
+          .handleError((Object _, StackTrace __) {});
+    });
+  }
 }
+
+/// Server-seitiger Rate-Limit-Treffer (siehe Cloud Functions).
+class RateLimitHit {
+  final String kind; // 'posts' | 'comments' | 'reports'
+  final DateTime at;
+  const RateLimitHit({required this.kind, required this.at});}
