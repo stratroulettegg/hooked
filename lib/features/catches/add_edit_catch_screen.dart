@@ -231,8 +231,17 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         lat: _saveLocation ? (linkedLat ?? _prefillLat) : null,
         lng: _saveLocation ? (linkedLng ?? _prefillLng) : null,
         caughtAt: _caughtAt,
-        isShared: _isShared,
-        shareWater: _isShared && _shareWater,
+        // Defensive Sicherung: ein Community-Post ohne Foto ist nicht
+        // erlaubt. Sollte der Schalter trotzdem aktiv sein (z.\u202fB. weil
+        // ein bestehender Eintrag das Foto verloren hat), wird die
+        // Freigabe hier hart deaktiviert.
+        isShared: _isShared
+            && _photoPath != null
+            && _photoPath!.isNotEmpty,
+        shareWater: _isShared
+            && _shareWater
+            && _photoPath != null
+            && _photoPath!.isNotEmpty,
       );
 
       if (widget.existing != null) {
@@ -395,7 +404,16 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
             const SizedBox(height: 8),
             PhotoPickerField(
               path: _photoPath,
-              onChanged: (p) => setState(() => _photoPath = p),
+              onChanged: (p) => setState(() {
+                _photoPath = p;
+                // Ohne Foto kein Community-Post — Schalter wird passend
+                // synchron mit zur\u00fcckgesetzt, damit kein verwaister
+                // Share-Status \u00fcberlebt.
+                if (p == null || p.isEmpty) {
+                  _isShared = false;
+                  _shareWater = false;
+                }
+              }),
               label: 'Fang-Foto',
             ),
             const SizedBox(height: 14),
@@ -454,6 +472,8 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
             _CommunityShareCard(
               isShared: _isShared,
               shareWater: _shareWater,
+              hasPhoto:
+                  _photoPath != null && _photoPath!.isNotEmpty,
               onSharedChanged: (v) => setState(() {
                 _isShared = v;
                 if (!v) _shareWater = false;
@@ -1559,31 +1579,38 @@ class _CommunityShareCard extends StatelessWidget {
   const _CommunityShareCard({
     required this.isShared,
     required this.shareWater,
+    required this.hasPhoto,
     required this.onSharedChanged,
     required this.onShareWaterChanged,
   });
 
   final bool isShared;
   final bool shareWater;
+  final bool hasPhoto;
   final ValueChanged<bool> onSharedChanged;
   final ValueChanged<bool> onShareWaterChanged;
 
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
+    // Ohne hochgeladenes Foto ist ein Community-Post nicht erlaubt.
+    // Der Toggle bleibt sichtbar (damit Nutzer:innen verstehen, was
+    // m\u00f6glich w\u00e4re), wird aber deaktiviert und visuell ged\u00e4mpft.
+    final disabled = !hasPhoto;
+    final activelyShared = isShared && hasPhoto;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: isShared
+        color: activelyShared
             ? ApexColors.primary.withAlpha(20)
             : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isShared
+          color: activelyShared
               ? ApexColors.primary.withAlpha(120)
               : c.border,
-          width: isShared ? 1.2 : 1,
+          width: activelyShared ? 1.2 : 1,
         ),
       ),
       child: Column(
@@ -1597,20 +1624,24 @@ class _CommunityShareCard extends StatelessWidget {
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: isShared
+                    color: activelyShared
                         ? ApexColors.primary.withAlpha(40)
                         : c.surface,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isShared
+                      color: activelyShared
                           ? ApexColors.primary.withAlpha(160)
                           : c.border,
                     ),
                   ),
                   child: Icon(
-                    isShared ? Icons.public : Icons.lock_outline,
+                    disabled
+                        ? Icons.no_photography_outlined
+                        : (activelyShared
+                            ? Icons.public
+                            : Icons.lock_outline),
                     size: 18,
-                    color: isShared
+                    color: activelyShared
                         ? ApexColors.primary
                         : c.textMuted,
                   ),
@@ -1625,15 +1656,19 @@ class _CommunityShareCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: c.textPrimary,
+                          color: disabled
+                              ? c.textMuted
+                              : c.textPrimary,
                           letterSpacing: 0.2,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        isShared
-                            ? 'Andere Angler:innen sehen Foto, Art & Maße'
-                            : 'Bleibt nur in deinem privaten Fangbuch',
+                        disabled
+                            ? 'Lade ein Foto deines Fangs hoch, um ihn zu teilen'
+                            : (activelyShared
+                                ? 'Andere Angler:innen sehen Foto, Art & Maße'
+                                : 'Bleibt nur in deinem privaten Fangbuch'),
                         style: TextStyle(
                           fontSize: 12,
                           color: c.textMuted,
@@ -1644,8 +1679,8 @@ class _CommunityShareCard extends StatelessWidget {
                   ),
                 ),
                 Switch.adaptive(
-                  value: isShared,
-                  onChanged: onSharedChanged,
+                  value: activelyShared,
+                  onChanged: disabled ? null : onSharedChanged,
                   activeThumbColor: ApexColors.primary,
                 ),
               ],
@@ -1654,7 +1689,7 @@ class _CommunityShareCard extends StatelessWidget {
           AnimatedSize(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOut,
-            child: !isShared
+            child: !activelyShared
                 ? const SizedBox.shrink()
                 : Column(
                     children: [

@@ -150,19 +150,22 @@ class FeedService {
 
     String? photoUrl;
     final file = AppPaths.photoFile(entry.photoPath);
-    if (file != null) {
-      try {
-        final ref = FirebaseStorage.instance.ref().child(
-          'feedPhotos/${user.uid}/${entry.id}.jpg',
-        );
-        await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
-        photoUrl = await ref.getDownloadURL();
-      } catch (e) {
-        // Upload-Fehler nicht den ganzen Publish kippen lassen.
-        // photoUrl bleibt null; Eintrag wird ohne Bild veröffentlicht.
-        // Logging übernimmt der Aufrufer.
-        rethrow;
-      }
+    // Community-Posts erfordern ein eigenes Foto. Ohne hochladbares Bild
+    // wird der Post stillschweigend nicht ver\u00f6ffentlicht \u2014 die UI
+    // verhindert das bereits, hier ist es eine letzte Sicherung gegen
+    // Race-Conditions (z.\u202fB. Datei in der Zwischenzeit gel\u00f6scht).
+    if (file == null) return;
+    try {
+      final ref = FirebaseStorage.instance.ref().child(
+        'feedPhotos/${user.uid}/${entry.id}.jpg',
+      );
+      await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      photoUrl = await ref.getDownloadURL();
+    } catch (e) {
+      // Upload-Fehler nicht den ganzen Publish kippen lassen.
+      // photoUrl bleibt null; Eintrag wird ohne Bild ver\u00f6ffentlicht.
+      // Logging \u00fcbernimmt der Aufrufer.
+      rethrow;
     }
 
     final data = <String, dynamic>{
