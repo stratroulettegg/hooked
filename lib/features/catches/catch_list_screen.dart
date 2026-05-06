@@ -1745,8 +1745,12 @@ class _FeedPostPageState extends State<_FeedPostPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxH = constraints.maxHeight;
-        final collapsedH = maxH * 0.32;
-        final expandedH = maxH * 0.95;
+        // Eingeklappt: gerade so viel, dass Header (Drag-Handle, Spezies/Gewicht,
+        // Meta-Zeile, ggf. Gewässer) sichtbar ist – Bild dominiert den Screen.
+        final hasWater = post.waterBodyName != null &&
+            post.waterBodyName!.isNotEmpty;
+        final collapsedH = hasWater ? 150.0 : 130.0;
+        final expandedH = maxH * 0.85;
         final sheetH = _expanded ? expandedH : collapsedH;
 
         return Stack(
@@ -1760,7 +1764,7 @@ class _FeedPostPageState extends State<_FeedPostPage> {
               ),
             ),
 
-            // Blur-Sheet mit Details.
+            // Floating Blur-Sheet mit Details (rounded top, halbtransparent).
             AnimatedPositioned(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
@@ -1768,21 +1772,24 @@ class _FeedPostPageState extends State<_FeedPostPage> {
               right: 0,
               bottom: 0,
               height: sheetH,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(40),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
                 ),
-                child: ClipRect(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(60),
+                        blurRadius: 24,
+                        offset: const Offset(0, -6),
+                      ),
+                    ],
+                  ),
                   child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                    filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                     child: ColoredBox(
-                      color: c.background.withAlpha(60),
+                      color: c.background.withAlpha(110),
                       child: Column(
                         children: [
                           GestureDetector(
