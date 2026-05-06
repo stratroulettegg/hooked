@@ -145,8 +145,9 @@ class SpotNotifier extends AsyncNotifier<List<FishingSpot>> {
   Future<FishingSpot> addSpot(FishingSpot spot) async {
     final newSpot = spot.copyWith(id: _uuid.v4());
     await _db.insertSpot(newSpot);
-    state = AsyncData([newSpot, ...state.valueOrNull ?? []]);
-    await _missionService.onSpotAdded(ref);
+    final newList = <FishingSpot>[newSpot, ...?state.valueOrNull];
+    state = AsyncData(newList);
+    await _missionService.onSpotAdded(newList, ref);
     return newSpot;
   }
 
@@ -929,8 +930,9 @@ class _MissionService {
         case 'ach_spot_regular':
           final counts = <String, int>{};
           for (final c in catches) {
-            if (c.spotId != null)
+            if (c.spotId != null) {
               counts[c.spotId!] = (counts[c.spotId!] ?? 0) + 1;
+            }
           }
           final maxAtSpot = counts.values.fold<int>(0, (a, b) => a > b ? a : b);
           await notifier.updateProgress(m.id, maxAtSpot);
@@ -938,9 +940,8 @@ class _MissionService {
     }
   }
 
-  Future<void> onSpotAdded(Ref ref) async {
+  Future<void> onSpotAdded(List<FishingSpot> spots, Ref ref) async {
     final missions = ref.read(missionProvider).valueOrNull ?? [];
-    final spots = ref.read(spotProvider).valueOrNull ?? [];
     final notifier = ref.read(missionProvider.notifier);
     for (final m in missions) {
       if (m.isCompleted) continue;

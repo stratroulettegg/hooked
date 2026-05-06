@@ -246,6 +246,33 @@ class NotificationService {
     await _cancel(_tripMorningId(tripId));
   }
 
+  // ─── Public API: Voice-Quick-Add Erinnerung ───────────────────────────────
+
+  /// Stabile ID-Bucket für „Foto/Details-zu-Fang"-Erinnerungen.
+  int _catchDetailsId(String catchId) =>
+      4_000_000 + (catchId.hashCode.abs() % 1_000_000);
+
+  /// Plant eine lokale Erinnerung, später Foto und Details zu einem per
+  /// Sprache erfassten Fang zu ergänzen.
+  Future<void> scheduleCatchDetailsReminder({
+    required String catchId,
+    required String species,
+    required DateTime when,
+  }) async {
+    if (!_initialized) await init();
+    if (!_permissionGranted) {
+      // Versuch ohne Dialog — falls iOS still erlaubt, ist alles ok.
+      await refreshPermission();
+    }
+    await _zonedSchedule(
+      id: _catchDetailsId(catchId),
+      title: 'Foto & Details ergänzen',
+      body: 'Dein „$species"-Fang wartet noch auf Foto und Details.',
+      when: when,
+      payload: 'catch:$catchId',
+    );
+  }
+
   // ─── Public API: Reaktive / sofortige Notifications ───────────────────────
 
   Future<void> showDocNudge({

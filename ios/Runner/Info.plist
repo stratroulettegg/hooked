@@ -56,7 +56,9 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Hooked speichert Fotos deiner Fänge und Spots in deiner Mediathek.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Wird derzeit nicht aktiv genutzt.</string>
+	<string>Hooked nutzt das Mikrofon, damit du Fänge per Spracheingabe schnell erfassen kannst.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Hooked erkennt deine gesprochenen Fang-Daten (Art, Länge, Gewicht) für die schnelle Erfassung.</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>maps</string>

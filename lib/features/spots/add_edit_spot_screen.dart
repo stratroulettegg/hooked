@@ -12,8 +12,20 @@ import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/water_location_field.dart';
 
 class AddEditSpotScreen extends ConsumerStatefulWidget {
-  const AddEditSpotScreen({super.key, this.existing});
+  const AddEditSpotScreen({
+    super.key,
+    this.existing,
+    this.prefillLat,
+    this.prefillLng,
+    this.prefillName,
+  });
   final FishingSpot? existing;
+
+  /// Vorbefüllte Koordinaten (z. B. „Spot aus Fang anlegen").
+  /// Wirken nur, wenn [existing] null ist.
+  final double? prefillLat;
+  final double? prefillLng;
+  final String? prefillName;
 
   @override
   ConsumerState<AddEditSpotScreen> createState() => _AddEditSpotScreenState();
@@ -45,6 +57,14 @@ class _AddEditSpotScreenState extends ConsumerState<AddEditSpotScreen> {
       _lng = e.lng;
       _structures = List.from(e.structures);
       _photoPath = e.photoPath;
+    } else {
+      if (widget.prefillLat != null && widget.prefillLng != null) {
+        _lat = widget.prefillLat;
+        _lng = widget.prefillLng;
+      }
+      if (widget.prefillName != null && widget.prefillName!.isNotEmpty) {
+        _nameCtrl.text = widget.prefillName!;
+      }
     }
   }
 

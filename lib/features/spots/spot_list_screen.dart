@@ -12,6 +12,7 @@ import '../../shared/services/app_providers.dart';
 import '../../shared/services/tile_cache_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
+import 'spot_detail_screen.dart' show SpotDetailArgs;
 
 class SpotListScreen extends ConsumerStatefulWidget {
   const SpotListScreen({super.key});
@@ -122,6 +123,10 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
               _activity != _SpotActivity.all ||
               _seasonTipOnly;
 
+          // ID-Liste in aktueller Filter-/Sort-Reihenfolge — wird an die
+          // Detail-Ansicht durchgereicht.
+          final siblingIds = [for (final s in filtered) s.id];
+
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
@@ -158,13 +163,13 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
                   ),
                 )
               else if (grouped != null)
-                ..._buildGroupedSlivers(grouped, catchCount)
+                ..._buildGroupedSlivers(grouped, catchCount, siblingIds)
               else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
                   sliver: _twoColumns
-                      ? _flatGridSliver(filtered)
-                      : _flatListSliver(filtered),
+                      ? _flatGridSliver(filtered, siblingIds)
+                      : _flatListSliver(filtered, siblingIds),
                 ),
               if (hasFilter && filtered.isNotEmpty)
                 SliverToBoxAdapter(
@@ -192,6 +197,7 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
   List<Widget> _buildGroupedSlivers(
     List<_WaterGroup> groups,
     Map<String, int> catchCount,
+    List<String> siblingIds,
   ) {
     final slivers = <Widget>[];
     for (var g = 0; g < groups.length; g++) {
@@ -215,15 +221,15 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
             g == groups.length - 1 ? 32 : 8,
           ),
           sliver: _twoColumns
-              ? _flatGridSliver(group.spots)
-              : _flatListSliver(group.spots),
+              ? _flatGridSliver(group.spots, siblingIds)
+              : _flatListSliver(group.spots, siblingIds),
         ),
       );
     }
     return slivers;
   }
 
-  Widget _flatListSliver(List<FishingSpot> spots) {
+  Widget _flatListSliver(List<FishingSpot> spots, List<String> siblingIds) {
     return SliverList.builder(
       itemCount: spots.length,
       itemBuilder: (_, i) => Padding(
@@ -238,14 +244,20 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
           child: _SpotCard(
             spot: spots[i],
             compact: false,
-            onTap: () => context.push('/spots/detail', extra: spots[i]),
+            onTap: () => context.push(
+              '/spots/detail',
+              extra: SpotDetailArgs(
+                spot: spots[i],
+                siblingIds: siblingIds,
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _flatGridSliver(List<FishingSpot> spots) {
+  Widget _flatGridSliver(List<FishingSpot> spots, List<String> siblingIds) {
     return SliverGrid.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -257,7 +269,13 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
       itemBuilder: (_, i) => _SpotCard(
         spot: spots[i],
         compact: true,
-        onTap: () => context.push('/spots/detail', extra: spots[i]),
+        onTap: () => context.push(
+          '/spots/detail',
+          extra: SpotDetailArgs(
+            spot: spots[i],
+            siblingIds: siblingIds,
+          ),
+        ),
       ),
     );
   }

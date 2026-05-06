@@ -1,3 +1,8 @@
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,306 +16,142 @@ import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
 import '../../shared/services/external_map_launcher.dart';
 import '../../shared/services/tile_cache_service.dart';
+import '../../shared/widgets/apex_app_bar.dart';
 
-class CatchDetailScreen extends ConsumerWidget {
-  const CatchDetailScreen({super.key, required this.entry});
+class CatchDetailArgs {
+  const CatchDetailArgs({required this.entry, this.siblingIds});
+  final CatchEntry entry;
+  final List<String>? siblingIds;
+}
+
+class CatchDetailScreen extends ConsumerStatefulWidget {
+  const CatchDetailScreen({
+    super.key,
+    required this.entry,
+    this.siblingIds,
+  });
   final CatchEntry entry;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Live-Daten aus Provider holen (falls nachträglich editiert)
-    final catchesAsync = ref.watch(catchProvider);
-    final all = catchesAsync.valueOrNull ?? const <CatchEntry>[];
-    final entry = catchesAsync.maybeWhen(
-      data: (list) => list.firstWhere(
-        (c) => c.id == this.entry.id,
-        orElse: () => this.entry,
-      ),
-      orElse: () => this.entry,
-    );
-    final isPB = _isPersonalBest(entry, all);
+  /// Optionale gefilterte/geordnete ID-Liste, durch die vertikal geswiped wird.
+  /// Wenn null, werden alle Fänge nach Datum absteigend genutzt.
+  final List<String>? siblingIds;
 
-    // Verknüpfter Spot (wenn vorhanden)
-    FishingSpot? spot;
-    if (entry.spotId != null) {
-      final spots = ref.watch(spotProvider).valueOrNull;
-      spot = spots?.where((s) => s.id == entry.spotId).firstOrNull;
+  @override
+  ConsumerState<CatchDetailScreen> createState() =>
+      _CatchDetailScreenState();
+}
+
+class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
+  late PageController _controller;
+  late String _currentId;
+  final ValueNotifier<bool> _isSwiping = ValueNotifier(false);
+
+  @override
+  void initState() {
+    super.initState();
+    _currentId = widget.entry.id;
+    final all =
+        ref.read(catchProvider).valueOrNull ?? const <CatchEntry>[];
+    final sorted = _orderedFor(all);
+    final idx = sorted.indexWhere((e) => e.id == widget.entry.id);
+    _controller = PageController(initialPage: idx >= 0 ? idx : 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _isSwiping.dispose();
+    super.dispose();
+  }
+
+  /// Falls eine gefilterte sibling-Liste übergeben wurde, liefere die Fänge
+  /// in genau dieser Reihenfolge (nur die, die noch existieren).
+  /// Sonst alle Fänge nach Datum absteigend.
+  /// Es werden nur Einträge mit Foto behalten — der initiale Eintrag bleibt
+  /// in jedem Fall enthalten.
+  List<CatchEntry> _orderedFor(List<CatchEntry> all) {
+    final ids = widget.siblingIds;
+    bool hasPhoto(CatchEntry e) =>
+        AppPaths.photoFile(e.photoPath) != null;
+    bool keep(CatchEntry e) => e.id == widget.entry.id || hasPhoto(e);
+    if (ids == null || ids.isEmpty) {
+      final out = [for (final e in all) if (keep(e)) e];
+      out.sort((a, b) => b.caughtAt.compareTo(a.caughtAt));
+      return out;
     }
-    // Koordinaten entweder direkt am Fang oder via verknüpftem Spot
-    double? lat = entry.lat;
-    double? lng = entry.lng;
-    String? label = entry.species.displayName;
-    if ((lat == null || lng == null) && spot != null) {
-      lat = spot.lat;
-      lng = spot.lng;
-      label = spot.name;
-    }
-    final hasCoords = lat != null && lng != null;
-    final photoFile = AppPaths.photoFile(entry.photoPath);
+    final byId = {for (final e in all) e.id: e};
+    return [
+      for (final id in ids)
+        if (byId[id] != null && keep(byId[id]!)) byId[id]!,
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = ApexColors.of(context);
+    final all =
+        ref.watch(catchProvider).valueOrNull ?? const <CatchEntry>[];
+    final sorted = _orderedFor(all);
+
+    if (sorted.isEmpty) {
+      return Scaffold(
+        backgroundColor: c.background,
+        appBar: const ApexAppBar(),
+        body: _CatchDetailContent(
+          initialEntry: widget.entry,
+          isSwiping: _isSwiping,
+        ),
+      );
+    }
+
+    final currentEntry = sorted.firstWhere(
+      (e) => e.id == _currentId,
+      orElse: () => widget.entry,
+    );
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
       backgroundColor: c.background,
-      body: Stack(
-        children: [
-          // Hero: Foto oder Fallback-Gradient (oberer Bildbereich)
-          Positioned.fill(
-            child: _DetailHeroBackdrop(
-              photoFile: photoFile,
-              species: entry.species.displayName,
-            ),
+      appBar: ApexAppBar(
+        extraActions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () =>
+                context.push('/catches/edit', extra: currentEntry),
           ),
-
-          // Bottom-Sheet mit allen Details (anheftet, hochziehbar)
-          DraggableScrollableSheet(
-            initialChildSize: photoFile != null ? 0.55 : 0.7,
-            minChildSize: 0.4,
-            maxChildSize: 0.95,
-            snap: true,
-            snapSizes: photoFile != null
-                ? const [0.55, 0.95]
-                : const [0.7, 0.95],
-            builder: (context, scrollController) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: c.background,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(40),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
-                  child: ListView(
-                    controller: scrollController,
-                    padding: EdgeInsets.zero,
-                    children: [
-                      // Drag-Handle
-                      const SizedBox(height: 10),
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: c.border,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Sheet-Header: Spot · Datum (collapsed sichtbar)
-                      Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 20),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 14,
-                              color: c.textMuted,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                AppDateFormats.dayMonthYearHourMinute
-                                    .format(entry.caughtAt),
-                                style: TextStyle(
-                                  fontFamily: 'Rajdhani',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: c.textSecondary,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ),
-                            if (spot != null) ...[
-                              Icon(
-                                Icons.place_outlined,
-                                size: 14,
-                                color: c.textMuted,
-                              ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  spot.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'Rajdhani',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: c.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Hero-Card: Fischart + Gewicht + PB
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: c.surface,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isPB
-                                      ? ApexColors.scoreMid
-                                      : ApexColors.primary.withAlpha(50),
-                                  width: isPB ? 1.6 : 1,
-                                ),
-                                boxShadow: context.isDark
-                                    ? []
-                                    : [
-                                        BoxShadow(
-                                          color: isPB
-                                              ? ApexColors.scoreMid
-                                                  .withAlpha(38)
-                                              : c.cardShadow,
-                                          blurRadius: isPB ? 16 : 12,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          entry.species.displayName,
-                                          style: TextStyle(
-                                            fontFamily: 'Rajdhani',
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.w700,
-                                            color: c.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                      if (isPB) const _PbBadge(),
-                                    ],
-                                  ),
-                                  if (entry.weightG != null)
-                                    Text(
-                                      entry.weightG! >= 1000
-                                          ? '${(entry.weightG! / 1000).toStringAsFixed(2)} kg'
-                                          : '${entry.weightG} g',
-                                      style: const TextStyle(
-                                        fontFamily: 'Rajdhani',
-                                        fontSize: 22,
-                                        color: ApexColors.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  if (entry.lengthCm != null)
-                                    Text(
-                                      '${entry.lengthCm} cm',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: c.textSecondary,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            if (hasCoords) ...[
-                              _MiniMap(
-                                lat: lat,
-                                lng: lng,
-                                label: label,
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-
-                            _DetailsGrid(entry: entry),
-                            const SizedBox(height: 16),
-
-                            if (spot != null) ...[
-                              _SpotDetailsCard(spot: spot),
-                              const SizedBox(height: 16),
-                            ],
-
-                            if (entry.notes != null &&
-                                entry.notes!.isNotEmpty) ...[
-                              _SectionCard(
-                                title: 'NOTIZEN',
-                                child: Text(
-                                  entry.notes!,
-                                  style: TextStyle(
-                                    color: c.textPrimary,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-
-          // Top-Overlay: Back + Edit + Delete (über Foto)
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  _OverlayIconButton(
-                    icon: Icons.arrow_back,
-                    onPressed: () => context.pop(),
-                  ),
-                  const Spacer(),
-                  _OverlayIconButton(
-                    icon: Icons.edit_outlined,
-                    onPressed: () =>
-                        context.push('/catches/edit', extra: entry),
-                  ),
-                  const SizedBox(width: 6),
-                  _OverlayIconButton(
-                    icon: Icons.delete_outline,
-                    iconColor: ApexColors.scoreLow,
-                    onPressed: () => _confirmDelete(context, ref),
-                  ),
-                ],
-              ),
-            ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline,
+                color: ApexColors.scoreLow),
+            onPressed: () => _confirmDelete(context, currentEntry),
           ),
         ],
+      ),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          if (n.depth != 0) return false;
+          if (n is ScrollStartNotification) {
+            _isSwiping.value = true;
+          } else if (n is ScrollEndNotification) {
+            _isSwiping.value = false;
+          }
+          return false;
+        },
+        child: PageView.builder(
+          controller: _controller,
+          scrollDirection: Axis.vertical,
+          itemCount: sorted.length,
+          onPageChanged: (i) =>
+              setState(() => _currentId = sorted[i].id),
+          itemBuilder: (context, i) => _CatchDetailContent(
+            initialEntry: sorted[i],
+            isSwiping: _isSwiping,
+          ),
+        ),
       ),
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmDelete(
+      BuildContext context, CatchEntry entry) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -339,9 +180,361 @@ class CatchDetailScreen extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(catchProvider.notifier).removeCatch(entry.id);
+      // Erst die Detail-Route poppen, DANN den Eintrag löschen — und zwar
+      // erst NACHDEM die Pop-Animation zu Ende ist. Sonst sieht man w\u00e4hrend
+      // des Slide-Outs kurz den ge\u00e4nderten PageView-Hintergrund (anderer
+      // Fang rutscht an die aktuelle Position) und es flackert.
+      final id = entry.id;
+      final notifier = ref.read(catchProvider.notifier);
       if (context.mounted) context.pop();
+      // Warte bis die Standard-Pop-Transition (~300 ms) durch ist.
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await notifier.removeCatch(id);
     }
+  }
+}
+
+class _CatchDetailContent extends ConsumerStatefulWidget {
+  const _CatchDetailContent({
+    required this.initialEntry,
+    required this.isSwiping,
+  });
+  final CatchEntry initialEntry;
+  final ValueListenable<bool> isSwiping;
+
+  @override
+  ConsumerState<_CatchDetailContent> createState() =>
+      _CatchDetailContentState();
+}
+
+class _CatchDetailContentState extends ConsumerState<_CatchDetailContent> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // Live-Daten aus Provider holen (falls nachträglich editiert)
+    final catchesAsync = ref.watch(catchProvider);
+    final all = catchesAsync.valueOrNull ?? const <CatchEntry>[];
+    final entry = catchesAsync.maybeWhen(
+      data: (list) => list.firstWhere(
+        (c) => c.id == widget.initialEntry.id,
+        orElse: () => widget.initialEntry,
+      ),
+      orElse: () => widget.initialEntry,
+    );
+    final isPB = _isPersonalBest(entry, all);
+
+    // Verknüpfter Spot (wenn vorhanden)
+    FishingSpot? spot;
+    if (entry.spotId != null) {
+      final spots = ref.watch(spotProvider).valueOrNull;
+      spot = spots?.where((s) => s.id == entry.spotId).firstOrNull;
+    }
+    // Koordinaten entweder direkt am Fang oder via verknüpftem Spot
+    double? lat = entry.lat;
+    double? lng = entry.lng;
+    String? label = entry.species.displayName;
+    if ((lat == null || lng == null) && spot != null) {
+      lat = spot.lat;
+      lng = spot.lng;
+      label = spot.name;
+    }
+    final hasCoords = lat != null && lng != null;
+    final photoFile = AppPaths.photoFile(entry.photoPath);
+    final c = ApexColors.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxH = constraints.maxHeight;
+        final collapsedH = math.max(
+          maxH * 0.16,
+          photoFile != null ? 150.0 : 0.0,
+        );
+        final expandedH = maxH * 0.95;
+        final sheetH = _expanded ? expandedH : collapsedH;
+
+        return Stack(
+          children: [
+            // Hero: Foto oder Fallback-Gradient
+            Positioned.fill(
+              child: _DetailHeroBackdrop(
+                photoFile: photoFile,
+                species: entry.species.displayName,
+                speciesAsset: entry.species.imageAsset,
+              ),
+            ),
+
+            // Sheet (animiert, Tap-Toggle, kein Drag) — fade-out beim Wischen
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: sheetH,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: widget.isSwiping,
+                builder: (context, swiping, child) {
+                  return IgnorePointer(
+                    ignoring: swiping,
+                    child: AnimatedSlide(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      offset: swiping
+                          ? const Offset(0, 1)
+                          : Offset.zero,
+                      child: child,
+                    ),
+                  );
+                },
+                child: DecoratedBox(
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(40),
+                      blurRadius: 20,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                    child: ColoredBox(
+                      color: c.background.withAlpha(60),
+                      child: Column(
+                        children: [
+                          // Tap-Toggle-Header: Drag-Handle + Caption (Spezies, Gewicht/Länge, PB, Datum/Spot)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () =>
+                                setState(() => _expanded = !_expanded),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                  20, 8, 20, 12),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
+                                children: [
+                                  // Drag-Handle visual (zentriert)
+                                  Center(
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                          milliseconds: 220),
+                                      width: _expanded ? 56 : 40,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: _expanded
+                                            ? ApexColors.primary
+                                                .withAlpha(180)
+                                            : c.border,
+                                        borderRadius:
+                                            BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  // Spezies + Gewicht + PB-Chip in einer Zeile
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.baseline,
+                                          textBaseline:
+                                              TextBaseline.alphabetic,
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                entry.species.displayName,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontFamily: 'Rajdhani',
+                                                  fontSize: 28,
+                                                  fontWeight:
+                                                      FontWeight.w800,
+                                                  height: 1.05,
+                                                  letterSpacing: 0.3,
+                                                  color: c.textPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                            if (entry.weightG != null) ...[
+                                              const SizedBox(width: 10),
+                                              Text(
+                                                entry.weightG! >= 1000
+                                                    ? '${(entry.weightG! / 1000).toStringAsFixed(2)} kg'
+                                                    : '${entry.weightG} g',
+                                                style: const TextStyle(
+                                                  fontFamily: 'Rajdhani',
+                                                  fontSize: 22,
+                                                  color:
+                                                      ApexColors.primary,
+                                                  fontWeight:
+                                                      FontWeight.w800,
+                                                  letterSpacing: 0.2,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      if (isPB) ...[
+                                        const SizedBox(width: 8),
+                                        const _PbBadge(),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  // Meta: Länge · Datum
+                                  Row(
+                                    children: [
+                                      if (entry.lengthCm != null) ...[
+                                        Text(
+                                          '${entry.lengthCm} cm',
+                                          style: TextStyle(
+                                            fontFamily: 'Rajdhani',
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: c.textSecondary,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                        _MetaDot(color: c.textMuted),
+                                      ],
+                                      Icon(
+                                        Icons.access_time,
+                                        size: 13,
+                                        color: c.textMuted,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          AppDateFormats
+                                              .dayMonthYearHourMinute
+                                              .format(entry.caughtAt),
+                                          overflow:
+                                              TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: 'Rajdhani',
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: c.textSecondary,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  // See in eigener Zeile
+                                  if (spot != null) ...[
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.place_outlined,
+                                          size: 13,
+                                          color: c.textMuted,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            spot.name,
+                                            overflow:
+                                                TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontFamily: 'Rajdhani',
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: c.textSecondary,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // Scrollbarer Content
+                          Expanded(
+                            child: ListView(
+                              padding: EdgeInsets.zero,
+                              physics: _expanded
+                                  ? const ClampingScrollPhysics()
+                                  : const NeverScrollableScrollPhysics(),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (hasCoords) ...[
+                                        _MiniMap(
+                                          lat: lat!,
+                                          lng: lng!,
+                                          label: label,
+                                        ),
+                                        const SizedBox(height: 16),
+                                      ],
+
+                                      _DetailsGrid(entry: entry),
+                                      const SizedBox(height: 16),
+
+                                      if (spot != null) ...[
+                                        _SpotDetailsCard(spot: spot),
+                                        const SizedBox(height: 16),
+                                      ] else if (hasCoords) ...[
+                                        _CreateSpotFromCatchCard(
+                                          lat: lat!,
+                                          lng: lng!,
+                                          suggestedName:
+                                              'Spot ${entry.species.displayName}',
+                                        ),
+                                        const SizedBox(height: 16),
+                                      ],
+
+                                      if (entry.notes != null &&
+                                          entry.notes!.isNotEmpty) ...[
+                                        _SectionCard(
+                                          title: 'NOTIZEN',
+                                          child: Text(
+                                            entry.notes!,
+                                            style: TextStyle(
+                                              color: c.textPrimary,
+                                              height: 1.5,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                      ],
+
+                                      const SizedBox(height: 24),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -560,20 +753,37 @@ bool _isPersonalBest(CatchEntry e, List<CatchEntry> all) {
   return best.id == e.id && score(e) > 0;
 }
 
+class _MetaDot extends StatelessWidget {
+  const _MetaDot({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Container(
+        width: 3,
+        height: 3,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      ),
+    );
+  }
+}
+
 class _PbBadge extends StatelessWidget {
   const _PbBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: ApexColors.scoreMid,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: ApexColors.scoreMid.withAlpha(120),
-            blurRadius: 12,
+            color: ApexColors.scoreMid.withAlpha(160),
+            blurRadius: 14,
             offset: const Offset(0, 2),
           ),
         ],
@@ -581,7 +791,7 @@ class _PbBadge extends StatelessWidget {
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.emoji_events, size: 14, color: Colors.black),
+          Icon(Icons.emoji_events, size: 13, color: Colors.black),
           SizedBox(width: 4),
           Text(
             'PB',
@@ -725,6 +935,176 @@ class _MiniMap extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DetailHeroBackdrop extends StatelessWidget {
+  const _DetailHeroBackdrop({
+    required this.photoFile,
+    required this.species,
+    required this.speciesAsset,
+  });
+
+  final File? photoFile;
+  final String species;
+  final String? speciesAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (photoFile != null)
+            Image.file(photoFile!, fit: BoxFit.cover)
+          else
+            // Fallback: dezenter Gradient + Spezies-Illustration aus Lexikon
+            // (oder gro\u00dfe Typo, falls f\u00fcr die Art kein Asset existiert).
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    c.surface,
+                    c.background,
+                  ],
+                ),
+              ),
+              alignment: Alignment.center,
+              child: speciesAsset != null
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 60, 24, 120),
+                      child: Opacity(
+                        opacity: 0.85,
+                        child: Image.asset(
+                          speciesAsset!,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 80, 24, 120),
+                      child: Text(
+                        species,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Rajdhani',
+                          fontSize: 56,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          color: c.textPrimary.withAlpha(60),
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+            ),
+          // Gradient-Overlay nach unten für Lesbarkeit der Buttons / Sheet-Übergang
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.25, 0.7, 1.0],
+                  colors: [
+                    Colors.black.withAlpha(70),
+                    Colors.transparent,
+                    Colors.transparent,
+                    c.background.withAlpha(180),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Karte, die unter dem Mini-Map angezeigt wird, wenn ein Fang Koordinaten,
+/// aber (noch) keinen verkn\u00fcpften Spot hat. Vorschlag: aus den Fang-GPS
+/// einen neuen Spot anlegen.
+class _CreateSpotFromCatchCard extends StatelessWidget {
+  const _CreateSpotFromCatchCard({
+    required this.lat,
+    required this.lng,
+    required this.suggestedName,
+  });
+
+  final double lat;
+  final double lng;
+  final String suggestedName;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: ApexColors.primary.withAlpha(40),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.add_location_alt_outlined,
+              color: ApexColors.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Spot aus diesem Fang',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Standort als neuen Angel-Spot speichern',
+                  style: TextStyle(color: c.textMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () => context.push(
+              '/spots/add',
+              extra: <String, dynamic>{
+                'lat': lat,
+                'lng': lng,
+                'name': suggestedName,
+              },
+            ),
+            style: TextButton.styleFrom(
+              foregroundColor: ApexColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            child: const Text(
+              'ANLEGEN',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
       ),
     );
   }

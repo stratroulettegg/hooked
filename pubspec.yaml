@@ -64,6 +64,9 @@ dependencies:
   timezone: ^0.10.1
   flutter_timezone: ^5.0.2
 
+  # Voice Quick-Add (Speech-to-Text)
+  speech_to_text: ^7.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

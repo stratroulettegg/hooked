@@ -15,8 +15,12 @@ import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/water_location_field.dart';
 
 class AddEditCatchScreen extends ConsumerStatefulWidget {
-  const AddEditCatchScreen({super.key, this.existing});
+  const AddEditCatchScreen({super.key, this.existing, this.prefill});
   final CatchEntry? existing;
+
+  /// Vorbefüllung für neue Einträge (z. B. aus Voice-Quick-Add).
+  /// Wirkt nur, wenn [existing] null ist.
+  final CatchEntry? prefill;
 
   @override
   ConsumerState<AddEditCatchScreen> createState() => _AddEditCatchScreenState();
@@ -35,6 +39,11 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
   final Set<RetrieveStyle> _retrieveStyles = {};
   String? _photoPath;
 
+  // Vorbefüllte GPS-Koordinaten (z. B. aus Voice-Quick-Add). Werden beim
+  // Speichern als Fallback genutzt, falls kein Spot verknüpft wird.
+  double? _prefillLat;
+  double? _prefillLng;
+
   // Spot-Verknüpfung
   String? _spotId; // existierender Spot
   bool _createNewSpot = false; // neuen Spot inline anlegen
@@ -47,12 +56,17 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
   String? _newSpotPhotoPath;
   List<StructureType> _newSpotStructures = [];
 
+  // Privacy: wenn deaktiviert, werden Lat/Lng beim Speichern auf null gesetzt
+  // (Fang taucht dann nicht mit GPS-Koordinaten auf, etwaige Spot-Linkings
+  // bleiben aber bestehen).
+  bool _saveLocation = true;
+
   bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    final e = widget.existing;
+    final e = widget.existing ?? widget.prefill;
     _species = e?.species ?? FishSpecies.hecht;
     _caughtAt = e?.caughtAt ?? DateTime.now();
     if (e != null) {
@@ -67,6 +81,17 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         ..addAll(e.retrieveStyles);
       _photoPath = e.photoPath;
       _spotId = e.spotId;
+      // Nur als Prefill-Fallback merken, wenn es ein neuer Eintrag ist.
+      if (widget.existing == null) {
+        _prefillLat = e.lat;
+        _prefillLng = e.lng;
+      } else {
+        // Im Edit-Modus: wenn der Eintrag keine Koordinaten und keinen Spot
+        // hat, nehmen wir an, dass der Standort bewusst verborgen wurde.
+        if (e.lat == null && e.lng == null && e.spotId == null) {
+          _saveLocation = false;
+        }
+      }
     }
   }
 
@@ -114,7 +139,6 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
       String? linkedSpotId = _spotId;
       double? linkedLat;
       double? linkedLng;
-
       if (_createNewSpot) {
         final newSpot = FishingSpot(
           id: const Uuid().v4(),
@@ -146,6 +170,40 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         linkedLng = s?.lng;
       }
 
+      // Auto-Spot-Zuordnung: Wenn (noch) kein Spot verknüpft ist, aber wir
+      // eine Fang-Position kennen, suchen wir den nächstgelegenen eigenen
+      // Spot im Umkreis von 75 m. So muss man bei Voice-Quick-Add nicht
+      // manuell nachverlinken.
+      // Achtung: Bei aktivem Privacy-Toggle (`_saveLocation == false`) wird
+      // diese Auto-Zuordnung übersprungen, sonst wäre der Standort indirekt
+      // über den verknüpften Spot rekonstruierbar.
+      String? autoLinkedSpotName;
+      if (_saveLocation && linkedSpotId == null && !_createNewSpot) {
+        final probeLat = _prefillLat;
+        final probeLng = _prefillLng;
+        if (probeLat != null && probeLng != null) {
+          final spots =
+              ref.read(spotProvider).valueOrNull ?? const <FishingSpot>[];
+          const distance = Distance();
+          final probe = LatLng(probeLat, probeLng);
+          FishingSpot? nearest;
+          double nearestMeters = double.infinity;
+          for (final s in spots) {
+            final m = distance(probe, LatLng(s.lat, s.lng));
+            if (m < nearestMeters) {
+              nearestMeters = m;
+              nearest = s;
+            }
+          }
+          if (nearest != null && nearestMeters <= 75) {
+            linkedSpotId = nearest.id;
+            linkedLat = nearest.lat;
+            linkedLng = nearest.lng;
+            autoLinkedSpotName = nearest.name;
+          }
+        }
+      }
+
       final entry = CatchEntry(
         id: widget.existing?.id ?? const Uuid().v4(),
         species: _species,
@@ -164,8 +222,8 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         retrieveStyles: _retrieveStyles.toList(),
         photoPath: _photoPath,
         spotId: linkedSpotId,
-        lat: linkedLat,
-        lng: linkedLng,
+        lat: _saveLocation ? (linkedLat ?? _prefillLat) : null,
+        lng: _saveLocation ? (linkedLng ?? _prefillLng) : null,
         caughtAt: _caughtAt,
       );
 
@@ -174,7 +232,17 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
       } else {
         await ref.read(catchProvider.notifier).addCatch(entry);
       }
-      if (mounted) context.pop();
+      if (mounted) {
+        if (autoLinkedSpotName != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('📍 Automatisch mit Spot „$autoLinkedSpotName" verknüpft'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        context.pop();
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -266,6 +334,15 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
             // Köder
             _SectionLabel('KÖDER'),
             const SizedBox(height: 8),
+            _RecentLuresChips(
+              currentValue: _lureCtrl.text,
+              onPick: (lure) => setState(() {
+                _lureCtrl.text = lure;
+                _lureCtrl.selection = TextSelection.collapsed(
+                  offset: _lureCtrl.text.length,
+                );
+              }),
+            ),
             _LurePicker(
               value: _lureCtrl.text.isEmpty ? null : _lureCtrl.text,
               onChanged: (v) => setState(() => _lureCtrl.text = v ?? ''),
@@ -341,6 +418,9 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
               newLng: _newSpotLng,
               newPhoto: _newSpotPhotoPath,
               newStructures: _newSpotStructures,
+              catchLat: widget.existing?.lat ?? _prefillLat,
+              catchLng: widget.existing?.lng ?? _prefillLng,
+              defaultSpotName: 'Spot ${_species.displayName}',
               onModeChange: ({String? id, bool createNew = false}) {
                 setState(() {
                   _spotId = id;
@@ -354,6 +434,11 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
               onPhotoChanged: (p) => setState(() => _newSpotPhotoPath = p),
               onStructuresChanged: (s) =>
                   setState(() => _newSpotStructures = s),
+            ),
+            const SizedBox(height: 20),
+            _PrivacyToggle(
+              value: _saveLocation,
+              onChanged: (v) => setState(() => _saveLocation = v),
             ),
             const SizedBox(height: 32),
           ],
@@ -764,6 +849,9 @@ class _SpotSection extends ConsumerWidget {
     required this.newLng,
     required this.newPhoto,
     required this.newStructures,
+    required this.catchLat,
+    required this.catchLng,
+    required this.defaultSpotName,
     required this.onModeChange,
     required this.onLocation,
     required this.onPhotoChanged,
@@ -780,6 +868,9 @@ class _SpotSection extends ConsumerWidget {
   final double? newLng;
   final String? newPhoto;
   final List<StructureType> newStructures;
+  final double? catchLat;
+  final double? catchLng;
+  final String defaultSpotName;
   final void Function({String? id, bool createNew}) onModeChange;
   final void Function(double lat, double lng) onLocation;
   final ValueChanged<String?> onPhotoChanged;
@@ -794,6 +885,21 @@ class _SpotSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (spotId == null && !createNew && catchLat != null && catchLng != null) ...[
+          _CreateSpotFromCatchHint(
+            onTap: () {
+              onLocation(catchLat!, catchLng!);
+              if (newName.text.trim().isEmpty) {
+                newName.text = defaultSpotName;
+                newName.selection = TextSelection.collapsed(
+                  offset: newName.text.length,
+                );
+              }
+              onModeChange(id: null, createNew: true);
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1191,6 +1297,233 @@ class _LurePicker extends StatelessWidget {
             Icon(Icons.arrow_drop_down, color: c.textMuted),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CreateSpotFromCatchHint extends StatelessWidget {
+  const _CreateSpotFromCatchHint({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Material(
+      color: ApexColors.primary.withAlpha(28),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: ApexColors.primary.withAlpha(50),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.add_location_alt_outlined,
+                  color: ApexColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Spot aus diesem Fang anlegen',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Übernimmt die Fang-Position als Standort',
+                      style: TextStyle(color: c.textMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: ApexColors.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Zeigt eine Reihe von Chips mit den 3 zuletzt am häufigsten verwendeten
+/// Ködern. Tap füllt das Köder-Feld direkt — spart Tippen bei Routine-Setups.
+class _RecentLuresChips extends ConsumerWidget {
+  const _RecentLuresChips({
+    required this.currentValue,
+    required this.onPick,
+  });
+
+  final String currentValue;
+  final void Function(String lure) onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ApexColors.of(context);
+    final catches = ref.watch(catchProvider).valueOrNull ?? const <CatchEntry>[];
+
+    // Häufigkeit der letzten ~50 Einträge zählen, leere ignorieren.
+    final recent = catches.take(50);
+    final counts = <String, int>{};
+    for (final e in recent) {
+      final l = e.lure?.trim();
+      if (l == null || l.isEmpty) continue;
+      counts[l] = (counts[l] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return const SizedBox.shrink();
+
+    final top = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final chips = top.take(3).map((e) => e.key).toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final lure in chips)
+            _RecentLureChip(
+              label: lure,
+              selected: lure == currentValue,
+              color: c,
+              onTap: () => onPick(lure),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentLureChip extends StatelessWidget {
+  const _RecentLureChip({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final ApexColors color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? ApexColors.primary.withAlpha(40)
+          : color.surface,
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: selected
+              ? ApexColors.primary
+              : color.border,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const StadiumBorder(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.history,
+                size: 14,
+                color: selected ? ApexColors.primary : color.textMuted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? ApexColors.primary : color.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Switch zum Verbergen des Standorts. Wenn aus, werden Lat/Lng beim
+/// Speichern auf null gesetzt — der Fang ist dann nicht auf der Karte
+/// sichtbar und wird ohne Koordinaten geteilt.
+class _PrivacyToggle extends StatelessWidget {
+  const _PrivacyToggle({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            value ? Icons.location_on : Icons.location_off,
+            color: value ? ApexColors.primary : c.textMuted,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Standort speichern',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: c.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value
+                      ? 'GPS-Koordinaten werden mit dem Fang gespeichert'
+                      : 'Hotspot bleibt geheim — kein GPS am Fang',
+                  style: TextStyle(fontSize: 12, color: c.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: ApexColors.primary,
+          ),
+        ],
       ),
     );
   }

@@ -8,6 +8,7 @@ import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
+import 'catch_detail_screen.dart' show CatchDetailArgs;
 
 class CatchListScreen extends ConsumerStatefulWidget {
   const CatchListScreen({super.key});
@@ -127,6 +128,11 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
           final hasFilter =
               _speciesFilter != null || _lureFilter != null || _onlyPB;
 
+          // ID-Liste in aktueller Filter-/Sort-Reihenfolge — wird an die
+          // Detail-Ansicht durchgereicht, damit die vertikale Swipe-Navigation
+          // die gleiche Reihenfolge nutzt.
+          final siblingIds = [for (final e in filtered) e.id];
+
           // Gruppierung (nur bei Datums-Sort sinnvoll).
           final grouped = _sort == _CatchSort.dateDesc
               ? _groupByMonth(filtered)
@@ -173,7 +179,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                   ),
                 )
               else if (grouped != null)
-                ..._buildGroupedSlivers(context, grouped, pbIds)
+                ..._buildGroupedSlivers(context, grouped, pbIds, siblingIds)
               else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
@@ -193,7 +199,10 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                             compact: true,
                             onTap: () => context.push(
                               '/catches/detail',
-                              extra: filtered[i],
+                              extra: CatchDetailArgs(
+                                entry: filtered[i],
+                                siblingIds: siblingIds,
+                              ),
                             ),
                           ),
                         )
@@ -215,7 +224,10 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                                 isPB: pbIds.contains(filtered[i].id),
                                 onTap: () => context.push(
                                   '/catches/detail',
-                                  extra: filtered[i],
+                                  extra: CatchDetailArgs(
+                                    entry: filtered[i],
+                                    siblingIds: siblingIds,
+                                  ),
                                 ),
                               ),
                             ),
@@ -249,6 +261,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
     BuildContext context,
     List<_MonthGroup> groups,
     Set<String> pbIds,
+    List<String> siblingIds,
   ) {
     final slivers = <Widget>[];
     for (var g = 0; g < groups.length; g++) {
@@ -283,7 +296,10 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                     compact: true,
                     onTap: () => context.push(
                       '/catches/detail',
-                      extra: group.entries[i],
+                      extra: CatchDetailArgs(
+                        entry: group.entries[i],
+                        siblingIds: siblingIds,
+                      ),
                     ),
                   ),
                 )
@@ -304,7 +320,10 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
                         isPB: pbIds.contains(group.entries[i].id),
                         onTap: () => context.push(
                           '/catches/detail',
-                          extra: group.entries[i],
+                          extra: CatchDetailArgs(
+                            entry: group.entries[i],
+                            siblingIds: siblingIds,
+                          ),
                         ),
                       ),
                     ),

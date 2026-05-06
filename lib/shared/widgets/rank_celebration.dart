@@ -395,8 +395,9 @@ class _ConfettiPainter extends CustomPainter {
       // unteren Rand bevor die Animation endet.
       final dy = (-0.08 + p.vy * t * 1.35) * size.height;
 
-      if (dy > size.height + 40)
+      if (dy > size.height + 40) {
         continue; // komplett durch → nicht mehr zeichnen
+      }
 
       final rot = t * p.rotSpeed;
       canvas.save();
