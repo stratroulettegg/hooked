@@ -730,14 +730,19 @@ class _SpeciesChip extends StatelessWidget {
               style: const TextStyle(fontSize: 14),
             ),
             const SizedBox(width: 5),
-            Text(
-              species.displayName,
-              style: TextStyle(
-                fontFamily: 'Rajdhani',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-                color: c.textPrimary,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 110),
+              child: Text(
+                species.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Rajdhani',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                  color: c.textPrimary,
+                ),
               ),
             ),
             const SizedBox(width: 6),
