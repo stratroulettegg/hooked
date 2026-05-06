@@ -11,9 +11,17 @@ import '../services/firebase/auth_providers.dart';
 /// Unterstützt zusätzliche Actions links vom Menü und den standardmäßigen
 /// Zurück-Pfeil (automatisch, wenn canPop).
 class ApexAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  const ApexAppBar({super.key, this.extraActions = const []});
+  const ApexAppBar({
+    super.key,
+    this.extraActions = const [],
+    this.leading,
+  });
 
   final List<Widget> extraActions;
+
+  /// Optionales Leading-Widget (z. B. ein Zurück-Pfeil, der nicht via
+  /// Navigator.pop, sondern lokal einen Tab/State zurücksetzt).
+  final Widget? leading;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -22,6 +30,7 @@ class ApexAppBar extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ApexColors.of(context);
     return AppBar(
+      leading: leading,
       title: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerLeft,

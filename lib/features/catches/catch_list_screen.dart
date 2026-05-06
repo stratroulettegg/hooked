@@ -69,27 +69,35 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
     final statsAsync = ref.watch(catchStatsProvider);
 
     return Scaffold(
-      appBar: const ApexAppBar(),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: _FeedTabSwitch(
-              value: _tab,
-              onChanged: (i) {
-                setState(() => _tab = i);
-                // Beim Wechsel auf Community immer neu laden,
-                // damit der Stream sicher neu auf die Auth-Lage greift.
-                if (i == 1) {
-                  ref.invalidate(feedPostsProvider);
-                }
-              },
-            ),
-          ),
-          Expanded(
-            child: _tab == 1
-                ? const _CommunityFeedView()
-                : catchesAsync.when(
+      appBar: _tab == 1
+          ? ApexAppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Zurück zu „Meine"',
+                onPressed: () => setState(() => _tab = 0),
+              ),
+            )
+          : const ApexAppBar(),
+      body: _tab == 1
+          ? const _CommunityFeedView()
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: _FeedTabSwitch(
+                    value: _tab,
+                    onChanged: (i) {
+                      setState(() => _tab = i);
+                      // Beim Wechsel auf Community immer neu laden,
+                      // damit der Stream sicher neu auf die Auth-Lage greift.
+                      if (i == 1) {
+                        ref.invalidate(feedPostsProvider);
+                      }
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: catchesAsync.when(
                     loading: () => const Center(
                       child: CircularProgressIndicator(
                         color: ApexColors.primary,
