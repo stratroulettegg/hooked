@@ -518,7 +518,6 @@ const SUPPORTED_SPECIES = [
 type SuggestedSpecies = (typeof SUPPORTED_SPECIES)[number];
 
 const GEMINI_DAILY_CAP = 5000; // Schutz gegen Kostenexplosion (~$0.14 max)
-const GEMINI_REGION = "europe-west1"; // europe-west3 unterstützt gemini-2.0-flash nicht
 const GEMINI_MODEL = "gemini-2.0-flash";
 
 const GEMINI_PROMPT = `Du bist ein Bestimmungs-Assistent für deutsche Süßwasser-Raubfische.
@@ -542,38 +541,22 @@ Strenge Regeln:
 - Wenn kein Fisch zu sehen ist → "unbekannt"
 - Niemals Erklärungen, niemals Zusatztext, niemals Markdown.`;
 
-/** Holt einen kurzlebigen Access-Token vom GCP-Metadata-Server.
- *  Funktioniert zuverlässig in Cloud Run / Gen-2-Functions ohne extra Auth-Config.
- */
-async function getGcpAccessToken(): Promise<string> {
-  const res = await fetch(
-    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
-    { headers: { "Metadata-Flavor": "Google" } },
-  );
-  if (!res.ok) throw new Error(`Metadata token fetch failed: ${res.status}`);
-  const json = await res.json() as { access_token: string };
-  return json.access_token;
-}
+/** Ruft die Gemini Developer API (generativelanguage.googleapis.com) mit API-Key auf. */
+async function callGemini(imageBase64: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY nicht konfiguriert.");
 
-/** Ruft die Vertex AI generateContent-API per fetch auf (kein SDK). */
-async function callVertexGemini(imageBase64: string): Promise<string> {
-  const project = process.env.GCLOUD_PROJECT ?? "";
   const endpoint =
-    `https://${GEMINI_REGION}-aiplatform.googleapis.com/v1/projects/${project}` +
-    `/locations/${GEMINI_REGION}/publishers/google/models/${GEMINI_MODEL}:generateContent`;
-  const token = await getGcpAccessToken();
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{
         role: "user",
         parts: [
-          { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
+          { inline_data: { mime_type: "image/jpeg", data: imageBase64 } },
           { text: GEMINI_PROMPT },
         ],
       }],
@@ -583,7 +566,7 @@ async function callVertexGemini(imageBase64: string): Promise<string> {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => `HTTP ${res.status}`);
-    throw new Error(`Vertex AI ${res.status}: ${errText.slice(0, 400)}`);
+    throw new Error(`Gemini ${res.status}: ${errText.slice(0, 400)}`);
   }
 
   const data = await res.json() as {
@@ -614,7 +597,7 @@ async function tryReserveGeminiCall(): Promise<boolean> {
  * Bild vor dem Aufruf auf ~768px / q=80 → ~80–150 KB pro Request.
  */
 export const suggestFishSpecies = onCall(
-  { timeoutSeconds: 30, memory: "512MiB" },
+  { timeoutSeconds: 30, memory: "512MiB", secrets: ["GEMINI_API_KEY"] },
   async (request) => {
     if (!request.auth?.uid) {
       throw new HttpsError("unauthenticated", "Login erforderlich.");
@@ -635,7 +618,7 @@ export const suggestFishSpecies = onCall(
     }
 
     try {
-      const rawText = await callVertexGemini(imageBase64);
+      const rawText = await callGemini(imageBase64);
       const raw = rawText.trim().toLowerCase().replace(/[^a-zäöü]/g, "");
 
       const species: SuggestedSpecies = (SUPPORTED_SPECIES as readonly string[]).includes(raw)
