@@ -7,6 +7,7 @@ import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import vision from "@google-cloud/vision";
+import { VertexAI } from "@google-cloud/vertexai";
 
 initializeApp();
 
@@ -497,6 +498,150 @@ export const deleteUserAccount = onCall(
 
     logger.info("deleteUserAccount: done", { uid });
     return { ok: true };
+  },
+);
+
+// ── suggestFishSpecies: Gemini Vision Pre-Fill ──────────────────────────
+
+// Liste exakt aus FishSpecies-Enum in lib/shared/models/catch_entry.dart.
+// Reihenfolge wichtig — wir akzeptieren ausschließlich diese Werte zurück.
+const SUPPORTED_SPECIES = [
+  "hecht",
+  "zander",
+  "barsch",
+  "wels",
+  "forelle",
+  "huchen",
+  "aal",
+  "andere",
+  "unbekannt",
+] as const;
+type SuggestedSpecies = (typeof SUPPORTED_SPECIES)[number];
+
+const GEMINI_DAILY_CAP = 5000; // Schutz gegen Kostenexplosion (~$0.14 max)
+const GEMINI_REGION = "europe-west3";
+const GEMINI_MODEL = "gemini-2.0-flash";
+
+const GEMINI_PROMPT = `Du bist ein Bestimmungs-Assistent für deutsche Süßwasser-Raubfische.
+
+Welche Fischart ist auf dem Bild zu sehen? Antworte AUSSCHLIESSLICH mit
+genau einem dieser Werte (lowercase, ohne Anführungszeichen, ohne weiteren
+Text):
+
+- hecht       (Esox lucius)
+- zander      (Sander lucioperca)
+- barsch      (Perca fluviatilis, Flussbarsch)
+- wels        (Silurus glanis)
+- forelle     (Bach-, Regenbogen- oder Seeforelle)
+- huchen      (Hucho hucho, Donaulachs)
+- aal         (Anguilla anguilla)
+- andere      (irgendein anderer Fisch, z.B. Karpfen, Brasse, Rotauge)
+- unbekannt   (kein Fisch erkennbar oder Unsicher)
+
+Strenge Regeln:
+- Bei Unsicherheit zwischen zwei Arten → "unbekannt"
+- Wenn kein Fisch zu sehen ist → "unbekannt"
+- Niemals Erklärungen, niemals Zusatztext, niemals Markdown.`;
+
+let vertexClient: VertexAI | null = null;
+function getVertex(): VertexAI {
+  if (!vertexClient) {
+    vertexClient = new VertexAI({
+      // project wird aus Firebase-Default genommen
+      project: process.env.GCLOUD_PROJECT ?? process.env.GCP_PROJECT ?? "",
+      location: GEMINI_REGION,
+    });
+  }
+  return vertexClient;
+}
+
+async function tryReserveGeminiCall(): Promise<boolean> {
+  const day = new Date().toISOString().slice(0, 10);
+  const ref = db.collection("geminiUsage").doc(day);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = (snap.data()?.count as number | undefined) ?? 0;
+    if (count >= GEMINI_DAILY_CAP) return false;
+    tx.set(
+      ref,
+      { count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+    return true;
+  });
+}
+
+/**
+ * Nimmt ein kleines Thumbnail (base64 JPEG) entgegen und liefert eine
+ * Gemini-basierte Fischart-Schätzung zurück. Der Client komprimiert das
+ * Bild vor dem Aufruf auf ~768px / q=80 → ~80–150 KB pro Request.
+ */
+export const suggestFishSpecies = onCall(
+  { timeoutSeconds: 30, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Login erforderlich.");
+    }
+    const imageBase64 = request.data?.imageBase64 as string | undefined;
+    if (!imageBase64 || imageBase64.length < 100) {
+      throw new HttpsError("invalid-argument", "imageBase64 fehlt.");
+    }
+    if (imageBase64.length > 2_500_000) {
+      // ~1.8 MB JPEG. Mehr brauchen wir für 768px nicht.
+      throw new HttpsError("invalid-argument", "Bild zu groß.");
+    }
+
+    const allowed = await tryReserveGeminiCall().catch(() => true);
+    if (!allowed) {
+      logger.warn("Gemini daily cap reached", { uid: request.auth.uid });
+      return { species: "unbekannt", capped: true };
+    }
+
+    try {
+      const model = getVertex().getGenerativeModel({
+        model: GEMINI_MODEL,
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 16,
+        },
+      });
+
+      const result = await model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
+              { text: GEMINI_PROMPT },
+            ],
+          },
+        ],
+      });
+
+      const raw = (
+        result.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+      )
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-zäöü]/g, "");
+
+      const species: SuggestedSpecies = (SUPPORTED_SPECIES as readonly string[]).includes(
+        raw,
+      )
+        ? (raw as SuggestedSpecies)
+        : "unbekannt";
+
+      logger.info("Gemini species suggestion", {
+        uid: request.auth.uid,
+        raw,
+        species,
+      });
+      return { species, capped: false };
+    } catch (e) {
+      logger.error("Gemini call failed", { error: String(e) });
+      // Nicht weiterreichen — Vorschlag ist optional.
+      return { species: "unbekannt", capped: false, error: "model_error" };
+    }
   },
 );
 

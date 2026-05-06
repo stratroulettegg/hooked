@@ -8,7 +8,9 @@ import '../../core/format/app_formats.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
+import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
+import '../../shared/services/firebase/fish_suggestion_service.dart';
 import '../../shared/data/lure_catalog.dart';
 import '../../shared/widgets/photo_picker_field.dart';
 import '../../shared/widgets/apex_app_bar.dart';
@@ -66,6 +68,13 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
   bool _shareWater = false;
 
   bool _loading = false;
+
+  // Gemini-Fischarterkennung
+  final _fishSuggestion = FishSuggestionService();
+  FishSuggestion? _speciesSuggestion;
+  bool _suggesting = false;
+  String? _lastSuggestedFor; // Pfad, für den der letzte Vorschlag gilt
+  bool _userPickedSpecies = false; // wenn true, kein Auto-Apply mehr
 
   @override
   void initState() {
@@ -306,7 +315,10 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
             const SizedBox(height: 8),
             _SpeciesPicker(
               value: _species,
-              onChanged: (v) => setState(() => _species = v),
+              onChanged: (v) => setState(() {
+                _species = v;
+                _userPickedSpecies = true;
+              }),
             ),
             const SizedBox(height: 20),
 
@@ -412,10 +424,34 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
                 if (p == null || p.isEmpty) {
                   _isShared = false;
                   _shareWater = false;
+                  _speciesSuggestion = null;
+                  _lastSuggestedFor = null;
+                } else if (p != _lastSuggestedFor) {
+                  // Asynchron: Vorschlag im Hintergrund holen.
+                  _runSpeciesSuggestion(p);
                 }
               }),
               label: 'Fang-Foto',
             ),
+            if (_suggesting || _speciesSuggestion?.species != null) ...[
+              const SizedBox(height: 8),
+              _SpeciesSuggestionBanner(
+                loading: _suggesting,
+                suggestion: _speciesSuggestion?.species,
+                isCurrent: _speciesSuggestion?.species == _species,
+                onApply: () {
+                  final s = _speciesSuggestion?.species;
+                  if (s == null) return;
+                  setState(() {
+                    _species = s;
+                    _userPickedSpecies = true;
+                    _speciesSuggestion = null;
+                  });
+                },
+                onDismiss: () =>
+                    setState(() => _speciesSuggestion = null),
+              ),
+            ],
             const SizedBox(height: 14),
 
             // Notizen zum Fang (direkt unter dem Foto)
@@ -486,6 +522,31 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _runSpeciesSuggestion(String path) async {
+    final file = AppPaths.photoFile(path);
+    if (file == null) return;
+    setState(() {
+      _suggesting = true;
+      _speciesSuggestion = null;
+      _lastSuggestedFor = path;
+    });
+    final res = await _fishSuggestion.suggestFromFile(file);
+    if (!mounted) return;
+    // Inzwischen wurde Foto evtl. wieder ausgetauscht.
+    if (_lastSuggestedFor != path) return;
+    setState(() {
+      _suggesting = false;
+      _speciesSuggestion = res;
+      // Komfort: Bei NEUEM Eintrag und solange der User die Art noch nicht
+      // selbst angefasst hat, übernehmen wir den Vorschlag automatisch.
+      if (widget.existing == null &&
+          !_userPickedSpecies &&
+          res?.species != null) {
+        _species = res!.species!;
+      }
+    });
   }
 }
 
@@ -1749,6 +1810,106 @@ class _CommunityShareCard extends StatelessWidget {
                       ),
                     ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kleiner Banner unter dem Foto-Picker mit Gemini-Vorschlag.
+class _SpeciesSuggestionBanner extends StatelessWidget {
+  const _SpeciesSuggestionBanner({
+    required this.loading,
+    required this.suggestion,
+    required this.isCurrent,
+    required this.onApply,
+    required this.onDismiss,
+  });
+
+  final bool loading;
+  final FishSpecies? suggestion;
+  final bool isCurrent;
+  final VoidCallback onApply;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ApexColors.of(context);
+    final scheme = Theme.of(context).colorScheme;
+
+    if (loading) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.surfaceVariant,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: colors.border),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Fisch-Erkennung läuft …',
+              style: TextStyle(
+                fontSize: 13,
+                color: colors.textMuted,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final s = suggestion;
+    if (s == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Text(s.emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isCurrent
+                  ? 'Vorschlag übernommen: ${s.displayName}'
+                  : 'Tipp: ${s.displayName}?',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors.textPrimary,
+              ),
+            ),
+          ),
+          if (!isCurrent)
+            TextButton(
+              onPressed: onApply,
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Übernehmen'),
+            ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: onDismiss,
+            tooltip: 'Vorschlag schließen',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
         ],
       ),
