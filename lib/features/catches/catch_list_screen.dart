@@ -1766,9 +1766,30 @@ class _FeedPostPage extends ConsumerWidget {
           ),
         ),
 
-        // Rechte Action-Spalte (TikTok-Stil): Like + Kommentar.
-        // Liegt im selben unteren Bereich wie Meta-Pills + Sheet, damit
-        // die Buttons nicht mit dem Sheet kollidieren.
+        // Sanfter Dunkel-Gradient am Bildunterrand fuer garantierten
+        // Kontrast — egal wie hell das Foto ist.
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 360,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withAlpha(40),
+                    Colors.black.withAlpha(140),
+                  ],
+                  stops: const [0.0, 0.55, 1.0],
+                ),
+              ),
+            ),
+          ),
+        ),
 
         // Unten: Action-Spalte rechts, darunter Meta-Pills, darunter Sheet.
         Positioned(
@@ -1781,7 +1802,7 @@ class _FeedPostPage extends ConsumerWidget {
             children: [
               // Action-Spalte rechts.
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -1796,17 +1817,19 @@ class _FeedPostPage extends ConsumerWidget {
                           iconColor:
                               liked ? ApexColors.scoreLow : Colors.white,
                           count: post.likeCount,
+                          highlighted: liked,
                           onTap: me == null
                               ? null
                               : () => ref
                                   .read(feedServiceProvider)
                                   .toggleLike(post.id),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         _FeedActionButton(
                           icon: Icons.mode_comment_outlined,
                           iconColor: Colors.white,
                           count: post.commentCount,
+                          highlighted: false,
                           onTap: me == null
                               ? null
                               : () => _openComments(context, post.id),
@@ -1817,13 +1840,13 @@ class _FeedPostPage extends ConsumerWidget {
                 ),
               ),
 
-              // Floating Glas-Pills (auf dem Bild, knapp \u00fcber dem Sheet).
+              // Floating Glas-Pills (auf dem Bild, knapp ueber dem Sheet).
               Padding(
                 padding:
-                    const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     if (post.lengthCm != null)
                       _metaPill(
@@ -1841,6 +1864,7 @@ class _FeedPostPage extends ConsumerWidget {
                         c,
                         Icons.water,
                         post.waterBodyName!,
+                        accent: true,
                       ),
                     if (hasLure)
                       _metaPill(
@@ -1986,32 +2010,49 @@ class _FeedPostPage extends ConsumerWidget {
   }
 
   /// Schwebende Glas-Pill, die direkt auf dem Bild liegt.
-  Widget _metaPill(ApexColors c, IconData icon, String text) {
+  /// `accent: true` markiert wichtige Infos (z. B. Gewässer) mit
+  /// Primary-Tönung – sticht zwischen den anderen Pills hervor.
+  Widget _metaPill(
+    ApexColors c,
+    IconData icon,
+    String text, {
+    bool accent = false,
+  }) {
+    final iconColor = accent
+        ? ApexColors.primary
+        : Colors.white.withAlpha(230);
+    final bgAlpha = accent ? 90 : 70;
+    final borderColor = accent
+        ? ApexColors.primary.withAlpha(120)
+        : Colors.white.withAlpha(45);
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: Colors.black.withAlpha(110),
+            color: Colors.black.withAlpha(bgAlpha),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withAlpha(30)),
+            border: Border.all(color: borderColor, width: 0.7),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 13, color: Colors.white.withAlpha(220)),
-              const SizedBox(width: 5),
+              Icon(icon, size: 14, color: iconColor),
+              const SizedBox(width: 6),
               Text(
                 text,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Rajdhani',
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  letterSpacing: 0.3,
+                  color: accent ? Colors.white : Colors.white,
+                  letterSpacing: 0.4,
+                  shadows: const [
+                    Shadow(color: Colors.black54, blurRadius: 4),
+                  ],
                 ),
               ),
             ],
@@ -2035,61 +2076,135 @@ class _FeedPostPage extends ConsumerWidget {
 }
 
 /// Runder Glas-Button mit Icon + Counter (rechte Action-Spalte).
-class _FeedActionButton extends StatelessWidget {
+/// Animiert das Icon kurz beim Aktivieren (Like).
+class _FeedActionButton extends StatefulWidget {
   const _FeedActionButton({
     required this.icon,
     required this.iconColor,
     required this.count,
     required this.onTap,
+    this.highlighted = false,
   });
 
   final IconData icon;
   final Color iconColor;
   final int count;
   final VoidCallback? onTap;
+  final bool highlighted;
+
+  @override
+  State<_FeedActionButton> createState() => _FeedActionButtonState();
+}
+
+class _FeedActionButtonState extends State<_FeedActionButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 380),
+  );
+
+  @override
+  void didUpdateWidget(covariant _FeedActionButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.highlighted && !oldWidget.highlighted) {
+      _ctrl.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.35)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.35, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 60,
+      ),
+    ]).animate(_ctrl);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ClipOval(
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Material(
-              color: Colors.black.withAlpha(110),
-              shape: const CircleBorder(
-                side: BorderSide(color: Color(0x33FFFFFF)),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: widget.highlighted
+                    ? ApexColors.scoreLow.withAlpha(120)
+                    : Colors.black.withAlpha(120),
+                blurRadius: widget.highlighted ? 18 : 12,
+                spreadRadius: widget.highlighted ? 1 : 0,
               ),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: onTap,
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Icon(icon, color: iconColor, size: 22),
+            ],
+          ),
+          child: ClipOval(
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: Material(
+                color: Colors.black.withAlpha(90),
+                shape: const CircleBorder(
+                  side: BorderSide(color: Color(0x40FFFFFF), width: 0.7),
+                ),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: widget.onTap,
+                  child: SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Center(
+                      child: ScaleTransition(
+                        scale: scale,
+                        child: Icon(
+                          widget.icon,
+                          color: widget.iconColor,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ),
-        if (count > 0) ...[
-          const SizedBox(height: 4),
+        if (widget.count > 0) ...[
+          const SizedBox(height: 5),
           Text(
-            '$count',
+            _fmt(widget.count),
             style: const TextStyle(
               fontFamily: 'Rajdhani',
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               fontSize: 13,
               color: Colors.white,
+              letterSpacing: 0.3,
               shadows: [
-                Shadow(color: Colors.black54, blurRadius: 4),
+                Shadow(color: Colors.black87, blurRadius: 6),
               ],
             ),
           ),
         ],
       ],
     );
+  }
+
+  /// Kurzform für Counter: 1.2k, 12k.
+  static String _fmt(int n) {
+    if (n < 1000) return '$n';
+    final k = n / 1000;
+    return k < 10
+        ? '${k.toStringAsFixed(1)}k'
+        : '${k.toStringAsFixed(0)}k';
   }
 }
 
@@ -2157,38 +2272,66 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
       builder: (ctx, scrollCtrl) {
         return ClipRRect(
           borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(20)),
-          child: Container(
-            color: c.background,
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: c.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              const BorderRadius.vertical(top: Radius.circular(24)),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            child: Container(
+              decoration: BoxDecoration(
+                color: c.background.withAlpha(235),
+                border: Border(
+                  top: BorderSide(color: c.border.withAlpha(120)),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Kommentare',
-                        style: TextStyle(
-                          fontFamily: 'Rajdhani',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: c.textPrimary,
-                          letterSpacing: 0.4,
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 4),
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(Icons.mode_comment_outlined,
+                            size: 18, color: c.textMuted),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Kommentare',
+                          style: TextStyle(
+                            fontFamily: 'Rajdhani',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: c.textPrimary,
+                            letterSpacing: 0.6,
+                          ),
                         ),
-                      ),
-                    ],
+                        const Spacer(),
+                        commentsAsync.maybeWhen(
+                          data: (l) => Text(
+                            '${l.length}',
+                            style: TextStyle(
+                              fontFamily: 'Rajdhani',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: c.textMuted,
+                            ),
+                          ),
+                          orElse: () => const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
+                  Container(
+                    height: 1,
+                    color: c.border.withAlpha(80),
+                  ),
                 Expanded(
                   child: commentsAsync.when(
                     loading: () => const Center(
@@ -2302,62 +2445,91 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                     },
                   ),
                 ),
-                // Eingabefeld unten.
+                // Eingabefeld unten – als rounded Glas-Pill.
                 Container(
                   decoration: BoxDecoration(
                     border: Border(
-                      top: BorderSide(color: c.border),
+                      top:
+                          BorderSide(color: c.border.withAlpha(120)),
                     ),
                   ),
                   padding: EdgeInsets.fromLTRB(
-                      12, 8, 12, 8 + mediaInsets),
+                      14, 10, 10, 10 + mediaInsets),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: _ctrl,
-                          enabled: me != null && !_sending,
-                          minLines: 1,
-                          maxLines: 4,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _send(),
-                          decoration: InputDecoration(
-                            hintText: me == null
-                                ? 'Anmelden, um zu kommentieren'
-                                : 'Kommentar schreiben…',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide(color: c.border),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: c.surface,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                                color: c.border.withAlpha(160)),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          child: TextField(
+                            controller: _ctrl,
+                            enabled: me != null && !_sending,
+                            minLines: 1,
+                            maxLines: 4,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _send(),
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 14,
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide(color: c.border),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              hintText: me == null
+                                  ? 'Anmelden, um zu kommentieren'
+                                  : 'Kommentar schreiben…',
+                              hintStyle:
+                                  TextStyle(color: c.textMuted),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(
+                                      vertical: 10),
                             ),
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 10),
                           ),
                         ),
                       ),
-                      IconButton(
-                        icon: _sending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: ApexColors.primary,
-                                ),
-                              )
-                            : const Icon(Icons.send),
+                      const SizedBox(width: 8),
+                      Material(
                         color: ApexColors.primary,
-                        onPressed: me == null ? null : _send,
+                        shape: const CircleBorder(),
+                        elevation: 0,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: me == null || _sending ? null : _send,
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: Center(
+                              child: _sending
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child:
+                                          CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.send,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
+              ),
             ),
           ),
         );
