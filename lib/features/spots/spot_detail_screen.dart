@@ -25,11 +25,7 @@ class SpotDetailArgs {
 }
 
 class SpotDetailScreen extends ConsumerStatefulWidget {
-  const SpotDetailScreen({
-    super.key,
-    required this.spot,
-    this.siblingIds,
-  });
+  const SpotDetailScreen({super.key, required this.spot, this.siblingIds});
   final FishingSpot spot;
 
   /// Optionale gefilterte/geordnete ID-Liste, durch die vertikal geswiped wird.
@@ -49,8 +45,7 @@ class _SpotDetailScreenState extends ConsumerState<SpotDetailScreen> {
   void initState() {
     super.initState();
     _currentId = widget.spot.id;
-    final all =
-        ref.read(spotProvider).valueOrNull ?? const <FishingSpot>[];
+    final all = ref.read(spotProvider).valueOrNull ?? const <FishingSpot>[];
     final ordered = _orderedFor(all);
     final idx = ordered.indexWhere((s) => s.id == widget.spot.id);
     _controller = PageController(initialPage: idx >= 0 ? idx : 0);
@@ -65,12 +60,14 @@ class _SpotDetailScreenState extends ConsumerState<SpotDetailScreen> {
 
   List<FishingSpot> _orderedFor(List<FishingSpot> all) {
     final ids = widget.siblingIds;
-    bool hasPhoto(FishingSpot s) =>
-        AppPaths.photoFile(s.photoPath) != null;
+    bool hasPhoto(FishingSpot s) => AppPaths.photoFile(s.photoPath) != null;
     // Aktueller Spot bleibt immer enthalten — auch ohne Foto.
     bool keep(FishingSpot s) => s.id == widget.spot.id || hasPhoto(s);
     if (ids == null || ids.isEmpty) {
-      final out = [for (final s in all) if (keep(s)) s];
+      final out = [
+        for (final s in all)
+          if (keep(s)) s,
+      ];
       out.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return out;
     }
@@ -84,8 +81,7 @@ class _SpotDetailScreenState extends ConsumerState<SpotDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    final all =
-        ref.watch(spotProvider).valueOrNull ?? const <FishingSpot>[];
+    final all = ref.watch(spotProvider).valueOrNull ?? const <FishingSpot>[];
     final ordered = _orderedFor(all);
 
     if (ordered.isEmpty) {
@@ -114,8 +110,7 @@ class _SpotDetailScreenState extends ConsumerState<SpotDetailScreen> {
             onPressed: () => context.push('/spots/edit', extra: currentSpot),
           ),
           IconButton(
-            icon:
-                const Icon(Icons.delete_outline, color: ApexColors.scoreLow),
+            icon: const Icon(Icons.delete_outline, color: ApexColors.scoreLow),
             onPressed: () => _confirmDelete(context, currentSpot),
           ),
         ],
@@ -144,8 +139,7 @@ class _SpotDetailScreenState extends ConsumerState<SpotDetailScreen> {
     );
   }
 
-  Future<void> _confirmDelete(
-      BuildContext context, FishingSpot spot) async {
+  Future<void> _confirmDelete(BuildContext context, FishingSpot spot) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -194,8 +188,7 @@ class _SpotDetailContent extends ConsumerStatefulWidget {
   final ValueListenable<bool> isSwiping;
 
   @override
-  ConsumerState<_SpotDetailContent> createState() =>
-      _SpotDetailContentState();
+  ConsumerState<_SpotDetailContent> createState() => _SpotDetailContentState();
 }
 
 class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
@@ -212,17 +205,14 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
       orElse: () => widget.initialSpot,
     );
 
-    final allCatches =
-        ref.watch(catchProvider).valueOrNull ?? const [];
-    final spotCatches =
-        allCatches.where((c) => c.spotId == spot.id).toList();
+    final allCatches = ref.watch(catchProvider).valueOrNull ?? const [];
+    final spotCatches = allCatches.where((c) => c.spotId == spot.id).toList();
     final catchCount = spotCatches.length;
 
     // Arten-Aufschlüsselung: nach Häufigkeit absteigend
     final speciesCounts = <FishSpecies, int>{};
     for (final entry in spotCatches) {
-      speciesCounts[entry.species] =
-          (speciesCounts[entry.species] ?? 0) + 1;
+      speciesCounts[entry.species] = (speciesCounts[entry.species] ?? 0) + 1;
     }
     final speciesSorted = speciesCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -262,9 +252,7 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                     child: AnimatedSlide(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
-                      offset: swiping
-                          ? const Offset(0, 1)
-                          : Offset.zero,
+                      offset: swiping ? const Offset(0, 1) : Offset.zero,
                       child: child,
                     ),
                   );
@@ -293,7 +281,11 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                   setState(() => _expanded = !_expanded),
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(
-                                    20, 8, 20, 12),
+                                  20,
+                                  8,
+                                  20,
+                                  12,
+                                ),
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
@@ -301,16 +293,19 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                     Center(
                                       child: AnimatedContainer(
                                         duration: const Duration(
-                                            milliseconds: 220),
+                                          milliseconds: 220,
+                                        ),
                                         width: _expanded ? 56 : 40,
                                         height: 4,
                                         decoration: BoxDecoration(
                                           color: _expanded
-                                              ? ApexColors.primary
-                                                  .withAlpha(180)
+                                              ? ApexColors.primary.withAlpha(
+                                                  180,
+                                                )
                                               : c.border,
-                                          borderRadius:
-                                              BorderRadius.circular(2),
+                                          borderRadius: BorderRadius.circular(
+                                            2,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -335,8 +330,7 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                                   style: TextStyle(
                                                     fontFamily: 'Rajdhani',
                                                     fontSize: 28,
-                                                    fontWeight:
-                                                        FontWeight.w800,
+                                                    fontWeight: FontWeight.w800,
                                                     height: 1.05,
                                                     letterSpacing: 0.3,
                                                     color: c.textPrimary,
@@ -350,10 +344,8 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                                   style: const TextStyle(
                                                     fontFamily: 'Rajdhani',
                                                     fontSize: 22,
-                                                    color:
-                                                        ApexColors.primary,
-                                                    fontWeight:
-                                                        FontWeight.w800,
+                                                    color: ApexColors.primary,
+                                                    fontWeight: FontWeight.w800,
                                                     letterSpacing: 0.2,
                                                   ),
                                                 ),
@@ -363,8 +355,7 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                         ),
                                         if (catchCount > 0) ...[
                                           const SizedBox(width: 8),
-                                          _CatchCountChip(
-                                              count: catchCount),
+                                          _CatchCountChip(count: catchCount),
                                         ],
                                       ],
                                     ),
@@ -374,8 +365,7 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                         spot.structures.isNotEmpty)
                                       Row(
                                         children: [
-                                          if (spot.waterBodyName !=
-                                              null) ...[
+                                          if (spot.waterBodyName != null) ...[
                                             Icon(
                                               Icons.water,
                                               size: 13,
@@ -385,13 +375,11 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                             Flexible(
                                               child: Text(
                                                 spot.waterBodyName!,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   fontFamily: 'Rajdhani',
                                                   fontSize: 13,
-                                                  fontWeight:
-                                                      FontWeight.w700,
+                                                  fontWeight: FontWeight.w700,
                                                   color: c.textSecondary,
                                                   letterSpacing: 0.3,
                                                 ),
@@ -405,16 +393,13 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                             Flexible(
                                               child: Text(
                                                 spot.structures
-                                                    .map((s) =>
-                                                        s.displayName)
+                                                    .map((s) => s.displayName)
                                                     .join(', '),
-                                                overflow:
-                                                    TextOverflow.ellipsis,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   fontFamily: 'Rajdhani',
                                                   fontSize: 13,
-                                                  fontWeight:
-                                                      FontWeight.w600,
+                                                  fontWeight: FontWeight.w600,
                                                   color: c.textSecondary,
                                                 ),
                                               ),
@@ -435,7 +420,8 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                 children: [
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
+                                      horizontal: 16,
+                                    ),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
@@ -445,19 +431,17 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                         const SizedBox(height: 16),
                                         // Spot-Info
                                         Container(
-                                          padding:
-                                              const EdgeInsets.all(16),
+                                          padding: const EdgeInsets.all(16),
                                           decoration: BoxDecoration(
                                             color: c.surface,
-                                            borderRadius:
-                                                BorderRadius.circular(16),
-                                            border: Border.all(
-                                                color: c.border),
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(color: c.border),
                                           ),
                                           child: Column(
                                             children: [
-                                              if (spot.waterBodyName !=
-                                                  null)
+                                              if (spot.waterBodyName != null)
                                                 _InfoRow(
                                                   icon: Icons.water,
                                                   label: 'Gewässer',
@@ -470,8 +454,8 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                                   value: '${spot.depthM} m',
                                                 ),
                                               _InfoRow(
-                                                icon: Icons
-                                                    .location_on_outlined,
+                                                icon:
+                                                    Icons.location_on_outlined,
                                                 label: 'Koordinaten',
                                                 value:
                                                     '${spot.lat.toStringAsFixed(5)}, ${spot.lng.toStringAsFixed(5)}',
@@ -481,8 +465,7 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                                   icon: Icons.terrain,
                                                   label: 'Struktur',
                                                   value: spot.structures
-                                                      .map((s) =>
-                                                          s.displayName)
+                                                      .map((s) => s.displayName)
                                                       .join(', '),
                                                 ),
                                               if (catchCount > 0)
@@ -515,25 +498,26 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                                   species: e.key,
                                                   count: e.value,
                                                   onTap: () {
-                                                    final ofSpecies = [
-                                                      for (final ce
-                                                          in spotCatches)
-                                                        if (ce.species ==
-                                                            e.key)
-                                                          ce,
-                                                    ]..sort((a, b) => b
-                                                        .caughtAt
-                                                        .compareTo(
-                                                            a.caughtAt));
+                                                    final ofSpecies =
+                                                        [
+                                                          for (final ce
+                                                              in spotCatches)
+                                                            if (ce.species ==
+                                                                e.key)
+                                                              ce,
+                                                        ]..sort(
+                                                          (a, b) => b.caughtAt
+                                                              .compareTo(
+                                                                a.caughtAt,
+                                                              ),
+                                                        );
                                                     if (ofSpecies.isEmpty) {
                                                       return;
                                                     }
                                                     context.push(
                                                       '/catches/detail',
-                                                      extra:
-                                                          CatchDetailArgs(
-                                                        entry:
-                                                            ofSpecies.first,
+                                                      extra: CatchDetailArgs(
+                                                        entry: ofSpecies.first,
                                                         siblingIds: [
                                                           for (final ce
                                                               in ofSpecies)
@@ -548,8 +532,7 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                         ],
                                         const SizedBox(height: 16),
                                         // Saisonnotizen
-                                        if (spot
-                                            .seasonNotes.isNotEmpty) ...[
+                                        if (spot.seasonNotes.isNotEmpty) ...[
                                           Text(
                                             'SAISONNOTIZEN',
                                             style: TextStyle(
@@ -562,20 +545,21 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                           const SizedBox(height: 8),
                                           ...Season.values.map((season) {
                                             final note = spot.seasonNotes
-                                                .where((sn) =>
-                                                    sn.season == season)
+                                                .where(
+                                                  (sn) => sn.season == season,
+                                                )
                                                 .firstOrNull;
                                             if (note == null) {
-                                              return const SizedBox
-                                                  .shrink();
+                                              return const SizedBox.shrink();
                                             }
                                             return Padding(
-                                              padding:
-                                                  const EdgeInsets.only(
-                                                      bottom: 8),
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8,
+                                              ),
                                               child: _SeasonNoteCard(
-                                                  season: season,
-                                                  note: note),
+                                                season: season,
+                                                note: note,
+                                              ),
                                             );
                                           }),
                                           const SizedBox(height: 16),
@@ -584,14 +568,14 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                         if (spot.notes != null &&
                                             spot.notes!.isNotEmpty) ...[
                                           Container(
-                                            padding:
-                                                const EdgeInsets.all(16),
+                                            padding: const EdgeInsets.all(16),
                                             decoration: BoxDecoration(
                                               color: c.surface,
                                               borderRadius:
                                                   BorderRadius.circular(16),
                                               border: Border.all(
-                                                  color: c.border),
+                                                color: c.border,
+                                              ),
                                             ),
                                             child: Column(
                                               crossAxisAlignment:
@@ -601,8 +585,7 @@ class _SpotDetailContentState extends ConsumerState<_SpotDetailContent> {
                                                   'NOTIZEN',
                                                   style: TextStyle(
                                                     fontSize: 10,
-                                                    fontWeight:
-                                                        FontWeight.w700,
+                                                    fontWeight: FontWeight.w700,
                                                     letterSpacing: 1.5,
                                                     color: c.textMuted,
                                                   ),
@@ -727,10 +710,7 @@ class _SpeciesChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                species.emoji,
-                style: const TextStyle(fontSize: 16),
-              ),
+              Text(species.emoji, style: const TextStyle(fontSize: 16)),
               const SizedBox(width: 6),
               Text(
                 species.displayName,
@@ -744,8 +724,7 @@ class _SpeciesChip extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
                   color: ApexColors.primary,
                   borderRadius: BorderRadius.circular(10),
@@ -761,11 +740,7 @@ class _SpeciesChip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right,
-                size: 16,
-                color: c.textMuted,
-              ),
+              Icon(Icons.chevron_right, size: 16, color: c.textMuted),
             ],
           ),
         ),
@@ -804,10 +779,7 @@ class _SpotHeroBackdrop extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withAlpha(120),
-                      Colors.transparent,
-                    ],
+                    colors: [Colors.black.withAlpha(120), Colors.transparent],
                   ),
                 ),
               ),
@@ -825,10 +797,7 @@ class _SpotHeroBackdrop extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      c.background.withAlpha(180),
-                    ],
+                    colors: [Colors.transparent, c.background.withAlpha(180)],
                   ),
                 ),
               ),
@@ -933,8 +902,7 @@ class _SpotMiniMap extends StatelessWidget {
                     urlTemplate: MapTiles.urlFor(isDark: context.isDark),
                     subdomains: MapTiles.subdomains,
                     userAgentPackageName: MapTiles.userAgent,
-                    retinaMode:
-                        MediaQuery.devicePixelRatioOf(context) > 1.5,
+                    retinaMode: MediaQuery.devicePixelRatioOf(context) > 1.5,
                     tileProvider: TileCacheService.instance.provider,
                   ),
                   MarkerLayer(
@@ -947,8 +915,7 @@ class _SpotMiniMap extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: ApexColors.primary,
                             shape: BoxShape.circle,
-                            border:
-                                Border.all(color: c.background, width: 2),
+                            border: Border.all(color: c.background, width: 2),
                             boxShadow: [
                               BoxShadow(
                                 color: ApexColors.primary.withAlpha(120),
@@ -972,7 +939,9 @@ class _SpotMiniMap extends StatelessWidget {
                 bottom: 8,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: c.surface.withAlpha(220),
                     borderRadius: BorderRadius.circular(20),
@@ -980,8 +949,11 @@ class _SpotMiniMap extends StatelessWidget {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.map_outlined,
-                          size: 14, color: ApexColors.primary),
+                      Icon(
+                        Icons.map_outlined,
+                        size: 14,
+                        color: ApexColors.primary,
+                      ),
                       SizedBox(width: 6),
                       Text(
                         'IN KARTEN',

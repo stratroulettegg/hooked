@@ -42,16 +42,16 @@ class NotificationService {
       try {
         final info = await FlutterTimezone.getLocalTimezone();
         tzName = info.identifier;
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('notifications timezone lookup: $e');
+      }
       try {
         tz.setLocalLocation(tz.getLocation(tzName));
       } catch (_) {
         tz.setLocalLocation(tz.getLocation('UTC'));
       }
 
-      const androidInit = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
-      );
+      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
       const iosInit = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -78,15 +78,19 @@ class NotificationService {
     bool ok = true;
     try {
       if (Platform.isIOS) {
-        ok = await _plugin
+        ok =
+            await _plugin
                 .resolvePlatformSpecificImplementation<
-                    IOSFlutterLocalNotificationsPlugin>()
+                  IOSFlutterLocalNotificationsPlugin
+                >()
                 ?.requestPermissions(alert: true, badge: true, sound: true) ??
             false;
       } else if (Platform.isAndroid) {
-        ok = await _plugin
+        ok =
+            await _plugin
                 .resolvePlatformSpecificImplementation<
-                    AndroidFlutterLocalNotificationsPlugin>()
+                  AndroidFlutterLocalNotificationsPlugin
+                >()
                 ?.requestNotificationsPermission() ??
             false;
       }
@@ -104,9 +108,11 @@ class NotificationService {
     if (!_initialized) await init();
     if (Platform.isAndroid) {
       try {
-        final granted = await _plugin
+        final granted =
+            await _plugin
                 .resolvePlatformSpecificImplementation<
-                    AndroidFlutterLocalNotificationsPlugin>()
+                  AndroidFlutterLocalNotificationsPlugin
+                >()
                 ?.areNotificationsEnabled() ??
             false;
         _permissionGranted = granted;
@@ -183,7 +189,9 @@ class NotificationService {
     if (!_initialized) return;
     try {
       await _plugin.cancel(id: id);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('notifications cancel($id): $e');
+    }
   }
 
   // ─── Public API: Trip-Reminder ────────────────────────────────────────────
@@ -275,9 +283,7 @@ class NotificationService {
 
   // ─── Public API: Reaktive / sofortige Notifications ───────────────────────
 
-  Future<void> showDocNudge({
-    required int catchCountWithoutDoc,
-  }) async {
+  Future<void> showDocNudge({required int catchCountWithoutDoc}) async {
     if (!NotificationPrefs.isEnabled(NotificationCategory.docNudge)) return;
     // Höchstens 1× pro Tag
     final last = NotificationPrefs.lastDocNudge;
@@ -286,7 +292,7 @@ class NotificationService {
     }
     final body = catchCountWithoutDoc == 1
         ? 'Gestern gefangen, aber noch keine Notiz oder Foto — magst du was '
-            'ergänzen?'
+              'ergänzen?'
         : '$catchCountWithoutDoc Fänge ohne Foto/Notiz — kurz nachpflegen?';
     await _showNow(
       id: _Ids.docNudge,
@@ -308,16 +314,13 @@ class NotificationService {
     await _showNow(
       id: _Ids.streakWarning,
       title: 'Streak in Gefahr',
-      body:
-          '$streakDays-Tage-Streak läuft heute ab — kurz raus und halten?',
+      body: '$streakDays-Tage-Streak läuft heute ab — kurz raus und halten?',
       payload: 'route:/water-days',
     );
     await NotificationPrefs.markStreakWarning();
   }
 
-  Future<void> showOnThisDay({
-    required String body,
-  }) async {
+  Future<void> showOnThisDay({required String body}) async {
     if (!NotificationPrefs.isEnabled(NotificationCategory.onThisDay)) return;
     final last = NotificationPrefs.lastOnThisDay;
     if (last != null && DateTime.now().difference(last).inDays < 6) return;
@@ -331,16 +334,12 @@ class NotificationService {
   }
 
   Future<void> showFirstWaterOfMonth() async {
-    if (!NotificationPrefs.isEnabled(
-      NotificationCategory.firstWaterOfMonth,
-    )) {
+    if (!NotificationPrefs.isEnabled(NotificationCategory.firstWaterOfMonth)) {
       return;
     }
     final last = NotificationPrefs.lastFirstWater;
     final now = DateTime.now();
-    if (last != null &&
-        last.year == now.year &&
-        last.month == now.month) {
+    if (last != null && last.year == now.year && last.month == now.month) {
       return;
     }
     await _showNow(
@@ -358,9 +357,7 @@ class NotificationService {
     }
     final last = NotificationPrefs.lastMonthlyRecap;
     final now = DateTime.now();
-    if (last != null &&
-        last.year == now.year &&
-        last.month == now.month) {
+    if (last != null && last.year == now.year && last.month == now.month) {
       return;
     }
     await _showNow(
@@ -391,6 +388,8 @@ class NotificationService {
     if (!_initialized) return;
     try {
       await _plugin.cancelAll();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('notifications cancelAll: $e');
+    }
   }
 }

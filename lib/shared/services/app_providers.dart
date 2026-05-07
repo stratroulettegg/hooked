@@ -106,8 +106,9 @@ final _moderationService = ModerationService();
 final feedServiceProvider = Provider<FeedService>((_) => _feedService);
 
 /// ModerationService f\u00fcr Reports und Block-Listen.
-final moderationServiceProvider =
-    Provider<ModerationService>((_) => _moderationService);
+final moderationServiceProvider = Provider<ModerationService>(
+  (_) => _moderationService,
+);
 
 /// Stream der UIDs, die der eingeloggte Nutzer blockiert hat.
 /// Wird als Filter f\u00fcr Feed und Kommentare verwendet.
@@ -126,29 +127,32 @@ final rateLimitHitsProvider = StreamProvider<RateLimitHit?>((ref) {
 /// Posts von blockierten Nutzern und auto-versteckte Posts (`hidden=true`)
 /// werden client-seitig herausgefiltert.
 final feedPostsProvider = StreamProvider<List<FeedPost>>((ref) {
-  final blocked = ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
+  final blocked =
+      ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
   return _feedService.watchFeed().map(
-        (posts) => posts
-            .where((p) => !p.hidden && !blocked.contains(p.userId))
-            .toList(),
-      );
+    (posts) =>
+        posts.where((p) => !p.hidden && !blocked.contains(p.userId)).toList(),
+  );
 });
 
 /// Stream der eigenen Feed-Posts (alle, ohne Limit), als Map keyed by postId.
 final myFeedPostsProvider = StreamProvider<Map<String, FeedPost>>((ref) {
   return _feedService.watchMyFeed().map(
-        (posts) => {for (final p in posts) p.id: p},
-      );
+    (posts) => {for (final p in posts) p.id: p},
+  );
 });
 
 /// Stream der Kommentare zu einem Post. Kommentare blockierter Nutzer
 /// werden ebenfalls client-seitig ausgeblendet.
-final feedCommentsProvider =
-    StreamProvider.family<List<FeedComment>, String>((ref, postId) {
-  final blocked = ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
-  return _feedService.watchComments(postId).map(
-        (list) => list.where((c) => !blocked.contains(c.userId)).toList(),
-      );
+final feedCommentsProvider = StreamProvider.family<List<FeedComment>, String>((
+  ref,
+  postId,
+) {
+  final blocked =
+      ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
+  return _feedService
+      .watchComments(postId)
+      .map((list) => list.where((c) => !blocked.contains(c.userId)).toList());
 });
 
 // ─── Catch Provider ──────────────────────────────────────────────────────────
@@ -175,8 +179,10 @@ class CatchNotifier extends AsyncNotifier<List<CatchEntry>> {
   }
 
   Future<void> editCatch(CatchEntry entry) async {
-    final previous = (state.valueOrNull ?? const <CatchEntry>[])
-        .firstWhere((c) => c.id == entry.id, orElse: () => entry);
+    final previous = (state.valueOrNull ?? const <CatchEntry>[]).firstWhere(
+      (c) => c.id == entry.id,
+      orElse: () => entry,
+    );
     await _db.updateCatch(entry);
     state = AsyncData([
       for (final c in state.valueOrNull ?? [])
@@ -578,7 +584,14 @@ class CatchStats {
         final w = c.weightG ?? 0;
         if (w > (lureBestWeight[lure] ?? 0)) lureBestWeight[lure] = w;
       }
-      if (best == null || (c.weightG ?? 0) > (best.weightG ?? 0)) best = c;
+      // Globaler PB: längster Fang über alle Arten — Gewicht als Tiebreaker.
+      if (best == null) {
+        best = c;
+      } else {
+        final cs = (c.lengthCm ?? 0) * 10000 + (c.weightG ?? 0);
+        final bs = (best.lengthCm ?? 0) * 10000 + (best.weightG ?? 0);
+        if (cs > bs) best = c;
+      }
     }
 
     // Tiebreaker: höchste Anzahl > größte Fischlänge > schwerstes Gewicht.

@@ -62,7 +62,8 @@ class _AppQuickAddFabState extends State<AppQuickAddFab>
     final box = fabCtx.findRenderObject() as RenderBox?;
     if (box == null) return;
     final anchor = box.localToGlobal(
-        Offset(box.size.width / 2, box.size.height / 2));
+      Offset(box.size.width / 2, box.size.height / 2),
+    );
     HapticFeedback.lightImpact();
     _entry = OverlayEntry(
       builder: (_) => _FabFanOverlay(
@@ -90,7 +91,9 @@ class _AppQuickAddFabState extends State<AppQuickAddFab>
     if (_entry == null) return;
     try {
       await _ctrl.reverse();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('quick_add_fab close anim: $e');
+    }
     _entry?.remove();
     _entry = null;
     if (mounted) setState(() {});
@@ -154,14 +157,12 @@ class _FabFanOverlay extends StatelessWidget {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
-        final t =
-            Curves.easeOutBack.transform(animation.value.clamp(0.0, 1.0));
-        final scrimAlpha =
-            (animation.value * 130).clamp(0.0, 130.0).toInt();
+        final t = Curves.easeOutBack.transform(animation.value.clamp(0.0, 1.0));
+        final scrimAlpha = (animation.value * 130).clamp(0.0, 130.0).toInt();
         // Drei Positionen: links (135°), mitte (90° = direkt oben), rechts (45°)
         final dxDiag = math.cos(math.pi / 4) * satRadius * t;
         final dyDiag = math.sin(math.pi / 4) * satRadius * t;
-        final leftPos  = Offset(anchor.dx - dxDiag, anchor.dy - dyDiag);
+        final leftPos = Offset(anchor.dx - dxDiag, anchor.dy - dyDiag);
         final rightPos = Offset(anchor.dx + dxDiag, anchor.dy - dyDiag);
         return SizedBox(
           width: media.size.width,
@@ -172,8 +173,7 @@ class _FabFanOverlay extends StatelessWidget {
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: onScrimTap,
-                  child:
-                      Container(color: Colors.black.withAlpha(scrimAlpha)),
+                  child: Container(color: Colors.black.withAlpha(scrimAlpha)),
                 ),
               ),
               _FabSatellite(
@@ -246,9 +246,7 @@ class _FabSatellite extends StatelessWidget {
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: onTap,
-              child: Center(
-                child: Icon(icon, color: foreground, size: 30),
-              ),
+              child: Center(child: Icon(icon, color: foreground, size: 30)),
             ),
           ),
         ),

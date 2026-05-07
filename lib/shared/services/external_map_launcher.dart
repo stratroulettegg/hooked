@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../widgets/app_toast.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -23,9 +24,7 @@ class ExternalMapLauncher {
     if (Platform.isAndroid) {
       final ok = await openGoogleMaps(lat: lat, lng: lng, label: label);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Karten-App konnte nicht geöffnet werden.')),
-        );
+        AppToast.error(context, 'Karten-App konnte nicht geöffnet werden.');
       }
       return;
     }
@@ -38,13 +37,19 @@ class ExternalMapLauncher {
     if (provider == null) return;
 
     final ok = switch (provider) {
-      MapProvider.apple => await openAppleMaps(lat: lat, lng: lng, label: label),
-      MapProvider.google => await openGoogleMaps(lat: lat, lng: lng, label: label),
+      MapProvider.apple => await openAppleMaps(
+        lat: lat,
+        lng: lng,
+        label: label,
+      ),
+      MapProvider.google => await openGoogleMaps(
+        lat: lat,
+        lng: lng,
+        label: label,
+      ),
     };
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Karten-App konnte nicht geöffnet werden.')),
-      );
+      AppToast.error(context, 'Karten-App konnte nicht geöffnet werden.');
     }
   }
 
@@ -148,7 +153,11 @@ class _MapChooserSheet extends StatelessWidget {
 }
 
 class _ChooserTile extends StatelessWidget {
-  const _ChooserTile({required this.icon, required this.title, required this.onTap});
+  const _ChooserTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
   final IconData icon;
   final String title;
   final VoidCallback onTap;

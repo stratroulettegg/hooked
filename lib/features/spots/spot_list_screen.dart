@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
@@ -98,30 +99,34 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
               filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
               break;
             case _SpotSort.mostCatches:
-              filtered.sort((a, b) =>
-                  (catchCount[b.id] ?? 0).compareTo(catchCount[a.id] ?? 0));
+              filtered.sort(
+                (a, b) =>
+                    (catchCount[b.id] ?? 0).compareTo(catchCount[a.id] ?? 0),
+              );
               break;
             case _SpotSort.deepest:
-              filtered.sort((a, b) =>
-                  (b.depthM ?? -1).compareTo(a.depthM ?? -1));
+              filtered.sort(
+                (a, b) => (b.depthM ?? -1).compareTo(a.depthM ?? -1),
+              );
               break;
             case _SpotSort.nameAsc:
-              filtered.sort((a, b) =>
-                  a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+              filtered.sort(
+                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+              );
               break;
           }
 
           final availableStructures = <StructureType>{
             for (final s in spots) ...s.structures,
-          }.toList()
-            ..sort((a, b) => a.displayName.compareTo(b.displayName));
+          }.toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
 
           // Gruppierung nach Gewässer (nur bei Standard-Sortierung sinnvoll).
           final grouped = _sort == _SpotSort.newest
               ? _groupByWater(filtered, catchCount)
               : null;
 
-          final hasFilter = _structure != null ||
+          final hasFilter =
+              _structure != null ||
               _activity != _SpotActivity.all ||
               _seasonTipOnly;
 
@@ -131,9 +136,7 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
 
           return CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
-                child: _SpotOverviewMap(spots: spots),
-              ),
+              SliverToBoxAdapter(child: _SpotOverviewMap(spots: spots)),
               SliverToBoxAdapter(
                 child: _SpotFilterBar(
                   structure: _structure,
@@ -209,8 +212,10 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
           pinned: true,
           delegate: _WaterHeaderDelegate(
             group: group,
-            totalCatches: group.spots
-                .fold(0, (sum, s) => sum + (catchCount[s.id] ?? 0)),
+            totalCatches: group.spots.fold(
+              0,
+              (sum, s) => sum + (catchCount[s.id] ?? 0),
+            ),
           ),
         ),
       );
@@ -248,10 +253,7 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
             compact: false,
             onTap: () => context.push(
               '/spots/detail',
-              extra: SpotDetailArgs(
-                spot: spots[i],
-                siblingIds: siblingIds,
-              ),
+              extra: SpotDetailArgs(spot: spots[i], siblingIds: siblingIds),
             ),
           ),
         ),
@@ -273,10 +275,7 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
         compact: true,
         onTap: () => context.push(
           '/spots/detail',
-          extra: SpotDetailArgs(
-            spot: spots[i],
-            siblingIds: siblingIds,
-          ),
+          extra: SpotDetailArgs(spot: spots[i], siblingIds: siblingIds),
         ),
       ),
     );
@@ -325,7 +324,10 @@ class _WaterHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     final c = ApexColors.of(context);
     final spotCount = group.spots.length;
     final catchPart = totalCatches > 0
@@ -338,8 +340,7 @@ class _WaterHeaderDelegate extends SliverPersistentHeaderDelegate {
       alignment: Alignment.centerLeft,
       child: Row(
         children: [
-          Icon(Icons.water_drop_outlined,
-              size: 14, color: c.textSecondary),
+          Icon(Icons.water_drop_outlined, size: 14, color: c.textSecondary),
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 220),
@@ -357,9 +358,7 @@ class _WaterHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: Container(height: 1, color: c.border),
-          ),
+          Expanded(child: Container(height: 1, color: c.border)),
           const SizedBox(width: 10),
           Text(
             catchPart != null ? '$spotCount · $totalCatches' : '$spotCount',
@@ -401,8 +400,9 @@ class _SpotOverviewMapState extends State<_SpotOverviewMap> {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    final points =
-        widget.spots.map((s) => LatLng(s.lat, s.lng)).toList(growable: false);
+    final points = widget.spots
+        .map((s) => LatLng(s.lat, s.lng))
+        .toList(growable: false);
 
     final cameraFit = points.length == 1
         ? null
@@ -461,16 +461,12 @@ class _SpotOverviewMapState extends State<_SpotOverviewMap> {
                       width: _markerSize(_zoom),
                       height: _markerSize(_zoom),
                       child: GestureDetector(
-                        onTap: () =>
-                            context.push('/spots/detail', extra: s),
+                        onTap: () => context.push('/spots/detail', extra: s),
                         child: Container(
                           decoration: BoxDecoration(
                             color: ApexColors.primary,
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: c.background,
-                              width: 2,
-                            ),
+                            border: Border.all(color: c.background, width: 2),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withAlpha(50),
@@ -518,8 +514,7 @@ class _SpotCard extends ConsumerWidget {
         .firstOrNull;
 
     final allCatches = ref.watch(catchProvider).valueOrNull ?? const [];
-    final spotCatches =
-        allCatches.where((cn) => cn.spotId == spot.id).toList();
+    final spotCatches = allCatches.where((cn) => cn.spotId == spot.id).toList();
     final catchCount = spotCatches.length;
     final isHotspot = catchCount >= _hotspotThreshold;
 
@@ -568,9 +563,10 @@ class _SpotCard extends ConsumerWidget {
                       builder: (ctx, constraints) {
                         final file = AppPaths.photoFile(spot.photoPath);
                         if (file != null) {
-                          final cacheW = (constraints.maxWidth *
-                                  MediaQuery.devicePixelRatioOf(ctx))
-                              .round();
+                          final cacheW =
+                              (constraints.maxWidth *
+                                      MediaQuery.devicePixelRatioOf(ctx))
+                                  .round();
                           return Image.file(
                             file,
                             fit: BoxFit.cover,
@@ -604,8 +600,11 @@ class _SpotCard extends ConsumerWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.local_fire_department,
-                                  size: 13, color: Colors.white),
+                              Icon(
+                                Icons.local_fire_department,
+                                size: 13,
+                                color: Colors.white,
+                              ),
                               SizedBox(width: 4),
                               Text(
                                 'HOTSPOT',
@@ -638,8 +637,11 @@ class _SpotCard extends ConsumerWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.image_not_supported_outlined,
-                                  size: 12, color: Colors.white),
+                              Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 12,
+                                color: Colors.white,
+                              ),
                               SizedBox(width: 4),
                               Text(
                                 'Kein Foto',
@@ -660,7 +662,11 @@ class _SpotCard extends ConsumerWidget {
               // ── Header: Name + Tiefe ──────────────────────────────────
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                    compact ? 10 : 14, compact ? 9 : 12, compact ? 10 : 14, 0),
+                  compact ? 10 : 14,
+                  compact ? 9 : 12,
+                  compact ? 10 : 14,
+                  0,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -760,7 +766,11 @@ class _SpotCard extends ConsumerWidget {
               // ── Footer: Fänge-Count + Saison-Hinweis ──────────────────
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                    compact ? 10 : 14, 8, compact ? 10 : 14, compact ? 10 : 12),
+                  compact ? 10 : 14,
+                  8,
+                  compact ? 10 : 14,
+                  compact ? 10 : 12,
+                ),
                 child: Wrap(
                   spacing: compact ? 8 : 12,
                   runSpacing: 4,
@@ -771,10 +781,10 @@ class _SpotCard extends ConsumerWidget {
                       text: catchCount == 0
                           ? (compact ? '0' : 'Noch kein Fang')
                           : compact
-                              ? '$catchCount'
-                              : catchCount == 1
-                                  ? '1 Fang'
-                                  : '$catchCount Fänge',
+                          ? '$catchCount'
+                          : catchCount == 1
+                          ? '1 Fang'
+                          : '$catchCount Fänge',
                       iconColor: catchCount > 0
                           ? ApexColors.primary
                           : c.textMuted,
@@ -783,8 +793,7 @@ class _SpotCard extends ConsumerWidget {
                     if (compact && spot.depthM != null)
                       _SpotFooterChip(
                         icon: Icons.height,
-                        text:
-                            AppNum.meters(spot.depthM!),
+                        text: AppNum.meters(spot.depthM!),
                         iconColor: ApexColors.primary,
                       ),
                     if (seasonNote != null && !compact)
@@ -817,11 +826,7 @@ Widget _spotFallbackBackground() {
       ),
     ),
     child: const Center(
-      child: Icon(
-        Icons.location_on,
-        size: 56,
-        color: Colors.white70,
-      ),
+      child: Icon(Icons.location_on, size: 56, color: Colors.white70),
     ),
   );
 }
@@ -911,13 +916,15 @@ class _SpotFilterBar extends StatelessWidget {
     _SpotActivity activity,
     bool seasonTipOnly,
     _SpotSort sort,
-  ) onChanged;
+  )
+  onChanged;
   final VoidCallback onToggleColumns;
 
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    final hasAny = structure != null ||
+    final hasAny =
+        structure != null ||
         activity != _SpotActivity.all ||
         seasonTipOnly ||
         sort != _SpotSort.newest;
@@ -932,112 +939,123 @@ class _SpotFilterBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-          _SpotFilterChip(
-            icon: Icons.terrain,
-            label: structure?.displayName ?? 'Struktur',
-            active: structure != null,
-            onTap: () async {
-              if (availableStructures.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content:
-                          Text('Noch keine Strukturen an deinen Spots')),
-                );
-                return;
-              }
-              final picked = await showModalBottomSheet<StructureType>(
-                context: context,
-                showDragHandle: true,
-                backgroundColor: c.surface,
-                builder: (ctx) => _SpotPickerSheet<StructureType>(
-                  title: 'Struktur',
-                  items: availableStructures,
-                  selected: structure,
-                  labelOf: (s) => s.displayName,
-                ),
-              );
-              if (picked == null && structure != null) return;
-              onChanged(picked, activity, seasonTipOnly, sort);
-            },
-            onClear: structure != null
-                ? () => onChanged(null, activity, seasonTipOnly, sort)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          _SpotFilterChip(
-            icon: activity.icon,
-            label: activity == _SpotActivity.all
-                ? 'Aktivität'
-                : activity.label,
-            active: activity != _SpotActivity.all,
-            onTap: () async {
-              final picked = await showModalBottomSheet<_SpotActivity>(
-                context: context,
-                showDragHandle: true,
-                backgroundColor: c.surface,
-                builder: (ctx) => _SpotPickerSheet<_SpotActivity>(
-                  title: 'Aktivität',
-                  items: _SpotActivity.values,
-                  selected: activity,
-                  labelOf: (a) => a.label,
-                ),
-              );
-              if (picked == null) return;
-              onChanged(structure, picked, seasonTipOnly, sort);
-            },
-            onClear: activity != _SpotActivity.all
-                ? () => onChanged(
-                    structure, _SpotActivity.all, seasonTipOnly, sort)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          _SpotFilterChip(
-            icon: Icons.eco_outlined,
-            label: 'Saison-Tipp',
-            active: seasonTipOnly,
-            isToggle: true,
-            onTap: () =>
-                onChanged(structure, activity, !seasonTipOnly, sort),
-          ),
-          const SizedBox(width: 8),
-          _SpotFilterChip(
-            icon: Icons.sort,
-            label: sort.shortLabel,
-            active: sort != _SpotSort.newest,
-            onTap: () async {
-              final picked = await showModalBottomSheet<_SpotSort>(
-                context: context,
-                showDragHandle: true,
-                backgroundColor: c.surface,
-                builder: (ctx) => _SpotPickerSheet<_SpotSort>(
-                  title: 'Sortieren nach',
-                  items: _SpotSort.values,
-                  selected: sort,
-                  labelOf: (s) => s.label,
-                ),
-              );
-              if (picked == null) return;
-              onChanged(structure, activity, seasonTipOnly, picked);
-            },
-            onClear: sort != _SpotSort.newest
-                ? () => onChanged(
-                    structure, activity, seasonTipOnly, _SpotSort.newest)
-                : null,
-          ),
-          if (hasAny) ...[
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: () => onChanged(
-                  null, _SpotActivity.all, false, _SpotSort.newest),
-              icon: const Icon(Icons.close, size: 16),
-              label: const Text('Zurücksetzen'),
-              style: TextButton.styleFrom(
-                foregroundColor: c.textSecondary,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
+                  _SpotFilterChip(
+                    icon: Icons.terrain,
+                    label: structure?.displayName ?? 'Struktur',
+                    active: structure != null,
+                    onTap: () async {
+                      if (availableStructures.isEmpty) {
+                        AppToast.show(
+                          context,
+                          'Noch keine Strukturen an deinen Spots',
+                        );
+                        return;
+                      }
+                      final picked = await showModalBottomSheet<StructureType>(
+                        context: context,
+                        showDragHandle: true,
+                        backgroundColor: c.surface,
+                        builder: (ctx) => _SpotPickerSheet<StructureType>(
+                          title: 'Struktur',
+                          items: availableStructures,
+                          selected: structure,
+                          labelOf: (s) => s.displayName,
+                        ),
+                      );
+                      if (picked == null && structure != null) return;
+                      onChanged(picked, activity, seasonTipOnly, sort);
+                    },
+                    onClear: structure != null
+                        ? () => onChanged(null, activity, seasonTipOnly, sort)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _SpotFilterChip(
+                    icon: activity.icon,
+                    label: activity == _SpotActivity.all
+                        ? 'Aktivität'
+                        : activity.label,
+                    active: activity != _SpotActivity.all,
+                    onTap: () async {
+                      final picked = await showModalBottomSheet<_SpotActivity>(
+                        context: context,
+                        showDragHandle: true,
+                        backgroundColor: c.surface,
+                        builder: (ctx) => _SpotPickerSheet<_SpotActivity>(
+                          title: 'Aktivität',
+                          items: _SpotActivity.values,
+                          selected: activity,
+                          labelOf: (a) => a.label,
+                        ),
+                      );
+                      if (picked == null) return;
+                      onChanged(structure, picked, seasonTipOnly, sort);
+                    },
+                    onClear: activity != _SpotActivity.all
+                        ? () => onChanged(
+                            structure,
+                            _SpotActivity.all,
+                            seasonTipOnly,
+                            sort,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _SpotFilterChip(
+                    icon: Icons.eco_outlined,
+                    label: 'Saison-Tipp',
+                    active: seasonTipOnly,
+                    isToggle: true,
+                    onTap: () =>
+                        onChanged(structure, activity, !seasonTipOnly, sort),
+                  ),
+                  const SizedBox(width: 8),
+                  _SpotFilterChip(
+                    icon: Icons.sort,
+                    label: sort.shortLabel,
+                    active: sort != _SpotSort.newest,
+                    onTap: () async {
+                      final picked = await showModalBottomSheet<_SpotSort>(
+                        context: context,
+                        showDragHandle: true,
+                        backgroundColor: c.surface,
+                        builder: (ctx) => _SpotPickerSheet<_SpotSort>(
+                          title: 'Sortieren nach',
+                          items: _SpotSort.values,
+                          selected: sort,
+                          labelOf: (s) => s.label,
+                        ),
+                      );
+                      if (picked == null) return;
+                      onChanged(structure, activity, seasonTipOnly, picked);
+                    },
+                    onClear: sort != _SpotSort.newest
+                        ? () => onChanged(
+                            structure,
+                            activity,
+                            seasonTipOnly,
+                            _SpotSort.newest,
+                          )
+                        : null,
+                  ),
+                  if (hasAny) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () => onChanged(
+                        null,
+                        _SpotActivity.all,
+                        false,
+                        _SpotSort.newest,
+                      ),
+                      icon: const Icon(Icons.close, size: 16),
+                      label: const Text('Zurücksetzen'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.textSecondary,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1093,9 +1111,11 @@ class _SpotFilterChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 16,
-                color: active ? ApexColors.primary : c.textSecondary),
+            Icon(
+              icon,
+              size: 16,
+              color: active ? ApexColors.primary : c.textSecondary,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -1116,8 +1136,7 @@ class _SpotFilterChip extends StatelessWidget {
               const SizedBox(width: 6),
               GestureDetector(
                 onTap: onClear,
-                child: Icon(Icons.close,
-                    size: 14, color: ApexColors.primary),
+                child: Icon(Icons.close, size: 14, color: ApexColors.primary),
               ),
             ] else if (!active) ...[
               const SizedBox(width: 4),
@@ -1177,8 +1196,7 @@ class _SpotPickerSheet<T> extends StatelessWidget {
                   return ListTile(
                     title: Text(labelOf(item)),
                     trailing: isSel
-                        ? const Icon(Icons.check,
-                            color: ApexColors.primary)
+                        ? const Icon(Icons.check, color: ApexColors.primary)
                         : null,
                     onTap: () => Navigator.pop(ctx, item),
                   );
@@ -1236,30 +1254,38 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.map, size: 64, color: ApexColors.of(context).textMuted),
-          const SizedBox(height: 16),
-          Text(
-            'Noch keine Spots',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: ApexColors.of(context).textSecondary,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.map, size: 64, color: c.textMuted),
+            const SizedBox(height: 16),
+            Text(
+              'Noch keine Spots',
+              style: TextStyle(
+                fontFamily: 'Rajdhani',
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Lege deinen ersten Geheimspot an',
-            style: TextStyle(color: ApexColors.of(context).textMuted),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add_location_alt),
-            label: const Text('Spot anlegen'),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'Lege deinen ersten Geheimspot an: Position markieren, Strukturen notieren, später wiederfinden.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: c.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_location_alt),
+              label: const Text('Spot anlegen'),
+            ),
+          ],
+        ),
       ),
     );
   }

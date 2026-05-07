@@ -1,8 +1,11 @@
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'dart:async';
 import 'core/format/app_formats.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -10,6 +13,7 @@ import 'shared/services/app_paths.dart';
 import 'shared/services/app_providers.dart';
 import 'shared/services/firebase/auth_providers.dart';
 import 'shared/services/firebase/firebase_bootstrap.dart';
+import 'shared/services/firebase/user_profile_service.dart';
 import 'shared/services/notifications/notification_prefs.dart';
 import 'shared/services/notifications/notification_scheduler.dart';
 import 'shared/services/notifications/notification_service.dart';
@@ -20,6 +24,7 @@ import 'shared/widgets/rank_celebration.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await AppPaths.init();
   await TileCacheService.init();
   await OnboardingService.init();
@@ -27,6 +32,47 @@ void main() async {
   await NotificationService.instance.init();
   await NotificationService.instance.refreshPermission();
   await FirebaseBootstrap.init();
+
+  // Crashlytics nur einhängen, wenn Firebase verfügbar ist UND die native
+  // Plugin-Seite registriert wurde. Auf iOS ist das erst nach `pod install`
+  // der Fall; in dem Fall fällt der Bool-Lookup auf null und das Plugin
+  // wirft AssertionError. Daher defensiv per try/catch absichern.
+  var crashlyticsActive = false;
+  if (FirebaseBootstrap.isAvailable) {
+    try {
+      // Nur in Release-Builds aufzeichnen — in Debug stören Stacktraces nur.
+      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+        !kDebugMode,
+      );
+      crashlyticsActive = true;
+    } catch (e, st) {
+      debugPrint('Crashlytics init skipped: $e\n$st');
+    }
+  }
+
+  if (crashlyticsActive) {
+    // Globaler Error-Handler für sonst unbehandelte Framework-Fehler.
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    };
+
+    // Globaler Error-Handler für Async-Errors außerhalb des Frameworks.
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('Unhandled async error: $error\n$stack');
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  } else {
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('Unhandled async error: $error\n$stack');
+      return true;
+    };
+  }
+
   await initializeDateFormatting(appLocale, null);
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -53,9 +99,23 @@ class ApexApp extends ConsumerWidget {
       if (uid == null) return;
       // Nur bei tatsächlichem Wechsel triggern.
       if (prev?.valueOrNull?.uid == uid) return;
-      // Best-effort, Fehler werden im Notifier geschluckt.
-      // ignore: discarded_futures
-      ref.read(tripProvider.notifier).restoreCloudTrips(uid);
+      // Best-effort, Fehler werden zusätzlich geloggt.
+      unawaited(() async {
+        try {
+          await ref.read(tripProvider.notifier).restoreCloudTrips(uid);
+        } catch (e, st) {
+          debugPrint('restoreCloudTrips: $e\n$st');
+        }
+      }());
+      // Öffentliches User-Profil sicherstellen, damit fremde User uns
+      // sofort finden und der gespiegelte Avatar/Name aktuell bleibt.
+      unawaited(() async {
+        try {
+          await UserProfileService.instance.ensureMyProfileExists();
+        } catch (e, st) {
+          debugPrint('ensureMyProfileExists: $e\n$st');
+        }
+      }());
     });
 
     // Beim Start (und bei Daten-Änderungen) reaktive Notifications prüfen
@@ -64,17 +124,27 @@ class ApexApp extends ConsumerWidget {
       final catches = next.valueOrNull;
       final trips = ref.read(tripProvider).valueOrNull;
       if (catches == null || trips == null) return;
-      // ignore: discarded_futures
-      NotificationScheduler.instance.runStartupChecks(
-        catches: catches,
-        trips: trips,
-      );
+      unawaited(() async {
+        try {
+          await NotificationScheduler.instance.runStartupChecks(
+            catches: catches,
+            trips: trips,
+          );
+        } catch (e, st) {
+          debugPrint('notifications runStartupChecks: $e\n$st');
+        }
+      }());
     });
     ref.listen(tripProvider, (_, next) {
       final trips = next.valueOrNull;
       if (trips == null) return;
-      // ignore: discarded_futures
-      NotificationScheduler.instance.rescheduleAllTrips(trips);
+      unawaited(() async {
+        try {
+          await NotificationScheduler.instance.rescheduleAllTrips(trips);
+        } catch (e, st) {
+          debugPrint('notifications rescheduleAllTrips: $e\n$st');
+        }
+      }());
     });
 
     SystemChrome.setSystemUIOverlayStyle(

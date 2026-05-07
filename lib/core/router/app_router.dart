@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/catches/catch_list_screen.dart';
@@ -14,13 +15,18 @@ import '../../features/missions/missions_screen.dart';
 import '../../features/missions/lure_levels_screen.dart';
 import '../../features/lexicon/lexicon_screen.dart';
 import '../../features/forecast/forecast_screen.dart';
+import '../../features/feed/feed_screen.dart';
 import '../../features/water_days/water_days_screen.dart';
 import '../../features/records/records_screen.dart';
+import '../../features/revier/revier_screen.dart';
 import '../../features/settings/notification_settings_screen.dart';
 import '../../features/settings/blocked_users_screen.dart';
+import '../../features/settings/settings_screen.dart';
 import '../../features/auth/auth_screen.dart';
 import '../../features/auth/profile_screen.dart';
 import '../../features/auth/edit_profile_screen.dart';
+import '../../features/notifications/notifications_screen.dart';
+import '../../features/profile/user_profile_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
@@ -170,8 +176,12 @@ final appRouter = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              path: '/forecast',
-              builder: (_, __) => const ForecastScreen(),
+              path: '/feed',
+              builder: (_, state) {
+                final extra = state.extra;
+                final postId = extra is String ? extra : null;
+                return FeedScreen(initialPostId: postId);
+              },
             ),
           ],
         ),
@@ -183,6 +193,9 @@ final appRouter = GoRouter(
     GoRoute(path: '/lexicon', builder: (_, __) => const LexiconScreen()),
     GoRoute(path: '/water-days', builder: (_, __) => const WaterDaysScreen()),
     GoRoute(path: '/records', builder: (_, __) => const RecordsScreen()),
+    GoRoute(path: '/revier', builder: (_, __) => const RevierScreen()),
+    GoRoute(path: '/forecast', builder: (_, __) => const ForecastScreen()),
+    GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     GoRoute(
       path: '/settings/notifications',
       builder: (_, __) => const NotificationSettingsScreen(),
@@ -197,6 +210,15 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/profile/edit',
       builder: (_, __) => const EditProfileScreen(),
+    ),
+    GoRoute(
+      path: '/user/:uid',
+      builder: (_, state) =>
+          UserProfileScreen(uid: state.pathParameters['uid']!),
+    ),
+    GoRoute(
+      path: '/notifications',
+      builder: (_, __) => const NotificationsScreen(),
     ),
     // Onboarding — beim ersten Start
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
@@ -221,12 +243,12 @@ class _ScaffoldWithNavBarState extends ConsumerState<_ScaffoldWithNavBar> {
     // der Hit erst kürzlich passiert ist (max 30s alt) – sonst zeigt sich
     // beim App-Start jeder alte Eintrag als "frisch" an.
     if (_lastShownHitAt == hit.at) return;
-    if (DateTime.now().toUtc().difference(hit.at.toUtc()).inSeconds.abs() > 30) {
+    if (DateTime.now().toUtc().difference(hit.at.toUtc()).inSeconds.abs() >
+        30) {
       return;
     }
     _lastShownHitAt = hit.at;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
+    if (!mounted) return;
     final msg = switch (hit.kind) {
       'posts' =>
         'Du hast in der letzten Stunde sehr viele Fänge geteilt. '
@@ -239,12 +261,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<_ScaffoldWithNavBar> {
             'Bitte warte etwas, bevor du weitere Meldungen erstellst.',
       _ => 'Du hast ein Limit erreicht. Versuch es später nochmal.',
     };
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(seconds: 6),
-      ),
-    );
+    AppToast.error(context, msg);
   }
 
   @override
@@ -300,10 +317,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<_ScaffoldWithNavBar> {
 }
 
 class _CenterDockedNavBar extends StatelessWidget {
-  const _CenterDockedNavBar({
-    required this.currentIndex,
-    required this.onTap,
-  });
+  const _CenterDockedNavBar({required this.currentIndex, required this.onTap});
 
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -344,9 +358,9 @@ class _CenterDockedNavBar extends StatelessWidget {
             onTap: () => onTap(2),
           ),
           _NavItem(
-            icon: Icons.bolt_outlined,
-            selectedIcon: Icons.bolt,
-            label: 'Index',
+            icon: Icons.public_outlined,
+            selectedIcon: Icons.public,
+            label: 'Feed',
             selected: currentIndex == 3,
             onTap: () => onTap(3),
           ),

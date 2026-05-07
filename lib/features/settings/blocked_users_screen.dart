@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -45,8 +46,7 @@ class BlockedUsersScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.shield_outlined,
-                        size: 56, color: c.textMuted),
+                    Icon(Icons.shield_outlined, size: 56, color: c.textMuted),
                     const SizedBox(height: 12),
                     Text(
                       'Keine blockierten Nutzer',
@@ -111,9 +111,7 @@ class _BlockedListState extends ConsumerState<_BlockedList> {
         databaseId: 'default',
       );
       // Firestore unterstützt whereIn mit max 10 Elementen.
-      final pending = widget.uids
-          .where((u) => !_cache.containsKey(u))
-          .toList();
+      final pending = widget.uids.where((u) => !_cache.containsKey(u)).toList();
       for (var i = 0; i < pending.length; i += 10) {
         final chunk = pending.sublist(
           i,
@@ -156,9 +154,7 @@ class _BlockedListState extends ConsumerState<_BlockedList> {
       itemBuilder: (context, i) {
         final uid = widget.uids[i];
         final info = _cache[uid];
-        final name = info?.name?.isNotEmpty == true
-            ? info!.name!
-            : 'Unbekannt';
+        final name = info?.name?.isNotEmpty == true ? info!.name! : 'Unbekannt';
         return Container(
           decoration: BoxDecoration(
             color: c.surface,
@@ -189,13 +185,9 @@ class _BlockedListState extends ConsumerState<_BlockedList> {
             ),
             trailing: TextButton(
               onPressed: () async {
-                await ref
-                    .read(moderationServiceProvider)
-                    .unblockUser(uid);
+                await ref.read(moderationServiceProvider).unblockUser(uid);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('$name entsperrt.')),
-                  );
+                  AppToast.success(context, '$name entsperrt.');
                 }
               },
               child: const Text('Entsperren'),

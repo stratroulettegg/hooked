@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -32,15 +33,11 @@ Future<bool> showReportSheet(
 }) async {
   final me = ref.read(currentUserProvider);
   if (me == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bitte zuerst anmelden, um zu melden.')),
-    );
+    AppToast.error(context, 'Bitte zuerst anmelden, um zu melden.');
     return false;
   }
   if (me.uid == targetUid) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Du kannst dich nicht selbst melden.')),
-    );
+    AppToast.error(context, 'Du kannst dich nicht selbst melden.');
     return false;
   }
 
@@ -75,16 +72,13 @@ Future<bool> confirmBlockUser(
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: c.surface,
-      title: Text(
-        'Nutzer blockieren?',
-        style: TextStyle(color: c.textPrimary),
-      ),
+      title: Text('Nutzer blockieren?', style: TextStyle(color: c.textPrimary)),
       content: Text(
         targetName != null && targetName.isNotEmpty
             ? 'Du siehst keine Beiträge oder Kommentare von $targetName mehr. '
-                'Du kannst den Block in den Einstellungen wieder aufheben.'
+                  'Du kannst den Block in den Einstellungen wieder aufheben.'
             : 'Du siehst keine Beiträge oder Kommentare von diesem Nutzer mehr. '
-                'Du kannst den Block in den Einstellungen wieder aufheben.',
+                  'Du kannst den Block in den Einstellungen wieder aufheben.',
         style: TextStyle(color: c.textPrimary),
       ),
       actions: [
@@ -93,9 +87,7 @@ Future<bool> confirmBlockUser(
           child: const Text('Abbrechen'),
         ),
         FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: ApexColors.scoreLow,
-          ),
+          style: FilledButton.styleFrom(backgroundColor: ApexColors.scoreLow),
           onPressed: () => Navigator.of(ctx).pop(true),
           child: const Text('Blockieren'),
         ),
@@ -107,22 +99,17 @@ Future<bool> confirmBlockUser(
   try {
     await ref.read(moderationServiceProvider).blockUser(targetUid);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            targetName?.isNotEmpty == true
-                ? '$targetName blockiert.'
-                : 'Nutzer blockiert.',
-          ),
-        ),
+      AppToast.success(
+        context,
+        targetName?.isNotEmpty == true
+            ? '$targetName blockiert.'
+            : 'Nutzer blockiert.',
       );
     }
     return true;
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Blockieren fehlgeschlagen: $e')),
-      );
+      AppToast.error(context, 'Blockieren fehlgeschlagen: $e');
     }
     return false;
   }
@@ -179,18 +166,14 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
       }
       if (!mounted) return;
       Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Danke. Wir prüfen die Meldung und kümmern uns darum.'),
-        ),
+      AppToast.success(
+        context,
+        'Danke. Wir prüfen die Meldung und kümmern uns darum.',
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Melden fehlgeschlagen: $e')),
-      );
+      AppToast.error(context, 'Melden fehlgeschlagen: $e');
     }
   }
 
@@ -206,16 +189,13 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
       expand: false,
       builder: (ctx, scrollCtrl) {
         return ClipRRect(
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: BackdropFilter(
             filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(
               decoration: BoxDecoration(
                 color: c.background.withAlpha(235),
-                border: Border(
-                  top: BorderSide(color: c.border.withAlpha(120)),
-                ),
+                border: Border(top: BorderSide(color: c.border.withAlpha(120))),
               ),
               child: Padding(
                 padding: EdgeInsets.only(bottom: mediaInsets),
@@ -235,8 +215,11 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                       child: Row(
                         children: [
-                          Icon(Icons.flag_outlined,
-                              size: 18, color: c.textMuted),
+                          Icon(
+                            Icons.flag_outlined,
+                            size: 18,
+                            color: c.textMuted,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             widget.kind == ModerationTargetKind.post
@@ -253,15 +236,11 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
                         ],
                       ),
                     ),
-                    Container(
-                      height: 1,
-                      color: c.border.withAlpha(80),
-                    ),
+                    Container(height: 1, color: c.border.withAlpha(80)),
                     Flexible(
                       child: ListView(
                         controller: scrollCtrl,
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                         children: [
                           Text(
                             'Wähle einen Grund:',
@@ -280,8 +259,7 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
                               activeColor: ApexColors.primary,
                               value: r,
                               groupValue: _reason,
-                              onChanged: (v) =>
-                                  setState(() => _reason = v),
+                              onChanged: (v) => setState(() => _reason = v),
                               title: Text(
                                 r,
                                 style: TextStyle(
@@ -309,7 +287,9 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                    color: ApexColors.primary, width: 1.4),
+                                  color: ApexColors.primary,
+                                  width: 1.4,
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -357,8 +337,9 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
                                       width: 16,
                                       height: 16,
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white),
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
                                     )
                                   : const Icon(Icons.flag, size: 16),
                               label: const Text('Melden'),

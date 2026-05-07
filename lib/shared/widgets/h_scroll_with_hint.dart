@@ -6,11 +6,7 @@ import '../../core/theme/app_theme.dart';
 /// ClipRect sauber abgeschnitten, kein Overlay nötig.
 /// → wenn mehr Inhalt rechts, ← wenn am rechten Ende.
 class HScrollWithHint extends StatefulWidget {
-  const HScrollWithHint({
-    super.key,
-    required this.child,
-    this.padding,
-  });
+  const HScrollWithHint({super.key, required this.child, this.padding});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;

@@ -25,11 +25,7 @@ class CatchDetailArgs {
 }
 
 class CatchDetailScreen extends ConsumerStatefulWidget {
-  const CatchDetailScreen({
-    super.key,
-    required this.entry,
-    this.siblingIds,
-  });
+  const CatchDetailScreen({super.key, required this.entry, this.siblingIds});
   final CatchEntry entry;
 
   /// Optionale gefilterte/geordnete ID-Liste, durch die vertikal geswiped wird.
@@ -37,8 +33,7 @@ class CatchDetailScreen extends ConsumerStatefulWidget {
   final List<String>? siblingIds;
 
   @override
-  ConsumerState<CatchDetailScreen> createState() =>
-      _CatchDetailScreenState();
+  ConsumerState<CatchDetailScreen> createState() => _CatchDetailScreenState();
 }
 
 class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
@@ -50,8 +45,7 @@ class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
   void initState() {
     super.initState();
     _currentId = widget.entry.id;
-    final all =
-        ref.read(catchProvider).valueOrNull ?? const <CatchEntry>[];
+    final all = ref.read(catchProvider).valueOrNull ?? const <CatchEntry>[];
     final sorted = _orderedFor(all);
     final idx = sorted.indexWhere((e) => e.id == widget.entry.id);
     _controller = PageController(initialPage: idx >= 0 ? idx : 0);
@@ -71,11 +65,13 @@ class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
   /// in jedem Fall enthalten.
   List<CatchEntry> _orderedFor(List<CatchEntry> all) {
     final ids = widget.siblingIds;
-    bool hasPhoto(CatchEntry e) =>
-        AppPaths.photoFile(e.photoPath) != null;
+    bool hasPhoto(CatchEntry e) => AppPaths.photoFile(e.photoPath) != null;
     bool keep(CatchEntry e) => e.id == widget.entry.id || hasPhoto(e);
     if (ids == null || ids.isEmpty) {
-      final out = [for (final e in all) if (keep(e)) e];
+      final out = [
+        for (final e in all)
+          if (keep(e)) e,
+      ];
       out.sort((a, b) => b.caughtAt.compareTo(a.caughtAt));
       return out;
     }
@@ -89,8 +85,7 @@ class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
-    final all =
-        ref.watch(catchProvider).valueOrNull ?? const <CatchEntry>[];
+    final all = ref.watch(catchProvider).valueOrNull ?? const <CatchEntry>[];
     final sorted = _orderedFor(all);
 
     if (sorted.isEmpty) {
@@ -115,12 +110,10 @@ class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
         extraActions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
-            onPressed: () =>
-                context.push('/catches/edit', extra: currentEntry),
+            onPressed: () => context.push('/catches/edit', extra: currentEntry),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline,
-                color: ApexColors.scoreLow),
+            icon: const Icon(Icons.delete_outline, color: ApexColors.scoreLow),
             onPressed: () => _confirmDelete(context, currentEntry),
           ),
         ],
@@ -139,8 +132,7 @@ class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
           controller: _controller,
           scrollDirection: Axis.vertical,
           itemCount: sorted.length,
-          onPageChanged: (i) =>
-              setState(() => _currentId = sorted[i].id),
+          onPageChanged: (i) => setState(() => _currentId = sorted[i].id),
           itemBuilder: (context, i) => _CatchDetailContent(
             initialEntry: sorted[i],
             isSwiping: _isSwiping,
@@ -150,8 +142,7 @@ class _CatchDetailScreenState extends ConsumerState<CatchDetailScreen> {
     );
   }
 
-  Future<void> _confirmDelete(
-      BuildContext context, CatchEntry entry) async {
+  Future<void> _confirmDelete(BuildContext context, CatchEntry entry) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -280,252 +271,253 @@ class _CatchDetailContentState extends ConsumerState<_CatchDetailContent> {
                     child: AnimatedSlide(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
-                      offset: swiping
-                          ? const Offset(0, 1)
-                          : Offset.zero,
+                      offset: swiping ? const Offset(0, 1) : Offset.zero,
                       child: child,
                     ),
                   );
                 },
                 child: DecoratedBox(
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(40),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                    child: ColoredBox(
-                      color: c.background.withAlpha(60),
-                      child: Column(
-                        children: [
-                          // Tap-Toggle-Header: Drag-Handle + Caption (Spezies, Gewicht/Länge, PB, Datum/Spot)
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () =>
-                                setState(() => _expanded = !_expanded),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                  20, 8, 20, 12),
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
-                                children: [
-                                  // Drag-Handle visual (zentriert)
-                                  Center(
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                          milliseconds: 220),
-                                      width: _expanded ? 56 : 40,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: _expanded
-                                            ? ApexColors.primary
-                                                .withAlpha(180)
-                                            : c.border,
-                                        borderRadius:
-                                            BorderRadius.circular(2),
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(40),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                      child: ColoredBox(
+                        color: c.background.withAlpha(60),
+                        child: Column(
+                          children: [
+                            // Tap-Toggle-Header: Drag-Handle + Caption (Spezies, Gewicht/Länge, PB, Datum/Spot)
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () =>
+                                  setState(() => _expanded = !_expanded),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  8,
+                                  20,
+                                  12,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    // Drag-Handle visual (zentriert)
+                                    Center(
+                                      child: AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 220,
+                                        ),
+                                        width: _expanded ? 56 : 40,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          color: _expanded
+                                              ? ApexColors.primary.withAlpha(
+                                                  180,
+                                                )
+                                              : c.border,
+                                          borderRadius: BorderRadius.circular(
+                                            2,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  // Spezies + Gewicht + PB-Chip in einer Zeile
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      Expanded(
-                                        child: Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.baseline,
-                                          textBaseline:
-                                              TextBaseline.alphabetic,
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                entry.species.displayName,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  fontFamily: 'Rajdhani',
-                                                  fontSize: 28,
-                                                  fontWeight:
-                                                      FontWeight.w800,
-                                                  height: 1.05,
-                                                  letterSpacing: 0.3,
-                                                  color: c.textPrimary,
+                                    const SizedBox(height: 10),
+                                    // Spezies + Gewicht + PB-Chip in einer Zeile
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Expanded(
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.baseline,
+                                            textBaseline:
+                                                TextBaseline.alphabetic,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  entry.species.displayName,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontFamily: 'Rajdhani',
+                                                    fontSize: 28,
+                                                    fontWeight: FontWeight.w800,
+                                                    height: 1.05,
+                                                    letterSpacing: 0.3,
+                                                    color: c.textPrimary,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            if (entry.weightG != null) ...[
-                                              const SizedBox(width: 10),
-                                              Text(
-                                                AppNum.kg(entry.weightG!),
-                                                style: const TextStyle(
-                                                  fontFamily: 'Rajdhani',
-                                                  fontSize: 22,
-                                                  color:
-                                                      ApexColors.primary,
-                                                  fontWeight:
-                                                      FontWeight.w800,
-                                                  letterSpacing: 0.2,
+                                              if (entry.weightG != null) ...[
+                                                const SizedBox(width: 10),
+                                                Text(
+                                                  AppNum.kg(entry.weightG!),
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Rajdhani',
+                                                    fontSize: 22,
+                                                    color: ApexColors.primary,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.2,
+                                                  ),
                                                 ),
-                                              ),
+                                              ],
                                             ],
-                                          ],
-                                        ),
-                                      ),
-                                      if (isPB) ...[
-                                        const SizedBox(width: 8),
-                                        const _PbBadge(),
-                                      ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  // Meta: Länge · Datum
-                                  Row(
-                                    children: [
-                                      if (entry.lengthCm != null) ...[
-                                        Text(
-                                          '${entry.lengthCm} cm',
-                                          style: TextStyle(
-                                            fontFamily: 'Rajdhani',
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            color: c.textSecondary,
-                                            letterSpacing: 0.3,
                                           ),
                                         ),
-                                        _MetaDot(color: c.textMuted),
+                                        if (isPB) ...[
+                                          const SizedBox(width: 8),
+                                          const _PbBadge(),
+                                        ],
                                       ],
-                                      Icon(
-                                        Icons.access_time,
-                                        size: 13,
-                                        color: c.textMuted,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Flexible(
-                                        child: Text(
-                                          AppDateFormats
-                                              .dayMonthYearHourMinute
-                                              .format(entry.caughtAt),
-                                          overflow:
-                                              TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontFamily: 'Rajdhani',
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: c.textSecondary,
-                                            letterSpacing: 0.3,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  // See in eigener Zeile
-                                  if (spot != null) ...[
-                                    const SizedBox(height: 2),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    // Meta: Länge · Datum
                                     Row(
                                       children: [
+                                        if (entry.lengthCm != null) ...[
+                                          Text(
+                                            '${entry.lengthCm} cm',
+                                            style: TextStyle(
+                                              fontFamily: 'Rajdhani',
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: c.textSecondary,
+                                              letterSpacing: 0.3,
+                                            ),
+                                          ),
+                                          _MetaDot(color: c.textMuted),
+                                        ],
                                         Icon(
-                                          Icons.place_outlined,
+                                          Icons.access_time,
                                           size: 13,
                                           color: c.textMuted,
                                         ),
                                         const SizedBox(width: 4),
                                         Flexible(
                                           child: Text(
-                                            spot.name,
-                                            overflow:
-                                                TextOverflow.ellipsis,
+                                            AppDateFormats
+                                                .dayMonthYearHourMinute
+                                                .format(entry.caughtAt),
+                                            overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontFamily: 'Rajdhani',
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600,
                                               color: c.textSecondary,
+                                              letterSpacing: 0.3,
                                             ),
                                           ),
                                         ),
                                       ],
                                     ),
+                                    // See in eigener Zeile
+                                    if (spot != null) ...[
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.place_outlined,
+                                            size: 13,
+                                            color: c.textMuted,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              spot.name,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontFamily: 'Rajdhani',
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: c.textSecondary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
+                                ),
+                              ),
+                            ),
+
+                            // Scrollbarer Content
+                            Expanded(
+                              child: ListView(
+                                padding: EdgeInsets.zero,
+                                physics: _expanded
+                                    ? const ClampingScrollPhysics()
+                                    : const NeverScrollableScrollPhysics(),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (hasCoords) ...[
+                                          _MiniMap(
+                                            lat: lat!,
+                                            lng: lng!,
+                                            label: label,
+                                          ),
+                                          const SizedBox(height: 16),
+                                        ],
+
+                                        _DetailsGrid(entry: entry),
+                                        const SizedBox(height: 16),
+
+                                        if (spot != null) ...[
+                                          _SpotDetailsCard(spot: spot),
+                                          const SizedBox(height: 16),
+                                        ] else if (hasCoords) ...[
+                                          _CreateSpotFromCatchCard(
+                                            lat: lat!,
+                                            lng: lng!,
+                                            suggestedName:
+                                                'Spot ${entry.species.displayName}',
+                                          ),
+                                          const SizedBox(height: 16),
+                                        ],
+
+                                        if (entry.notes != null &&
+                                            entry.notes!.isNotEmpty) ...[
+                                          _SectionCard(
+                                            title: 'NOTIZEN',
+                                            child: Text(
+                                              entry.notes!,
+                                              style: TextStyle(
+                                                color: c.textPrimary,
+                                                height: 1.5,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                        ],
+
+                                        const SizedBox(height: 24),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                          ),
-
-                          // Scrollbarer Content
-                          Expanded(
-                            child: ListView(
-                              padding: EdgeInsets.zero,
-                              physics: _expanded
-                                  ? const ClampingScrollPhysics()
-                                  : const NeverScrollableScrollPhysics(),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      if (hasCoords) ...[
-                                        _MiniMap(
-                                          lat: lat!,
-                                          lng: lng!,
-                                          label: label,
-                                        ),
-                                        const SizedBox(height: 16),
-                                      ],
-
-                                      _DetailsGrid(entry: entry),
-                                      const SizedBox(height: 16),
-
-                                      if (spot != null) ...[
-                                        _SpotDetailsCard(spot: spot),
-                                        const SizedBox(height: 16),
-                                      ] else if (hasCoords) ...[
-                                        _CreateSpotFromCatchCard(
-                                          lat: lat!,
-                                          lng: lng!,
-                                          suggestedName:
-                                              'Spot ${entry.species.displayName}',
-                                        ),
-                                        const SizedBox(height: 16),
-                                      ],
-
-                                      if (entry.notes != null &&
-                                          entry.notes!.isNotEmpty) ...[
-                                        _SectionCard(
-                                          title: 'NOTIZEN',
-                                          child: Text(
-                                            entry.notes!,
-                                            style: TextStyle(
-                                              color: c.textPrimary,
-                                              height: 1.5,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                      ],
-
-                                      const SizedBox(height: 24),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
                 ),
               ),
             ),
@@ -745,8 +737,9 @@ class _SpotDetailsCard extends StatelessWidget {
 bool _isPersonalBest(CatchEntry e, List<CatchEntry> all) {
   final sameSpecies = all.where((x) => x.species == e.species);
   if (sameSpecies.isEmpty) return false;
+  // PB primär nach Länge (cm), Gewicht nur als Tiebreaker.
   int score(CatchEntry x) =>
-      ((x.weightG ?? 0) * 1000 + (x.lengthCm ?? 0)).toInt();
+      ((x.lengthCm ?? 0) * 10000).toInt() + (x.weightG ?? 0);
   final best = sameSpecies.reduce((a, b) => score(a) >= score(b) ? a : b);
   return best.id == e.id && score(e) > 0;
 }
@@ -808,11 +801,7 @@ class _PbBadge extends StatelessWidget {
 }
 
 class _MiniMap extends StatelessWidget {
-  const _MiniMap({
-    required this.lat,
-    required this.lng,
-    required this.label,
-  });
+  const _MiniMap({required this.lat, required this.lng, required this.label});
 
   final double lat;
   final double lng;
@@ -822,12 +811,8 @@ class _MiniMap extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
     return GestureDetector(
-      onTap: () => ExternalMapLauncher.choose(
-        context,
-        lat: lat,
-        lng: lng,
-        label: label,
-      ),
+      onTap: () =>
+          ExternalMapLauncher.choose(context, lat: lat, lng: lng, label: label),
       child: Container(
         height: 140,
         decoration: BoxDecoration(
@@ -861,8 +846,7 @@ class _MiniMap extends StatelessWidget {
                     urlTemplate: MapTiles.urlFor(isDark: context.isDark),
                     subdomains: MapTiles.subdomains,
                     userAgentPackageName: MapTiles.userAgent,
-                    retinaMode:
-                        MediaQuery.devicePixelRatioOf(context) > 1.5,
+                    retinaMode: MediaQuery.devicePixelRatioOf(context) > 1.5,
                     tileProvider: TileCacheService.instance.provider,
                   ),
                   MarkerLayer(
@@ -875,10 +859,7 @@ class _MiniMap extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: ApexColors.primary,
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
-                            ),
+                            border: Border.all(color: Colors.white, width: 2),
                             boxShadow: [
                               BoxShadow(
                                 color: ApexColors.primary.withAlpha(120),
@@ -902,7 +883,9 @@ class _MiniMap extends StatelessWidget {
                 bottom: 10,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: c.surface.withAlpha(230),
                     borderRadius: BorderRadius.circular(20),
@@ -911,8 +894,11 @@ class _MiniMap extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.open_in_new,
-                          size: 14, color: ApexColors.primary),
+                      Icon(
+                        Icons.open_in_new,
+                        size: 14,
+                        color: ApexColors.primary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'IN KARTEN',
@@ -965,10 +951,7 @@ class _DetailHeroBackdrop extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    c.surface,
-                    c.background,
-                  ],
+                  colors: [c.surface, c.background],
                 ),
               ),
               alignment: Alignment.center,
@@ -977,10 +960,7 @@ class _DetailHeroBackdrop extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(24, 60, 24, 120),
                       child: Opacity(
                         opacity: 0.85,
-                        child: Image.asset(
-                          speciesAsset!,
-                          fit: BoxFit.contain,
-                        ),
+                        child: Image.asset(speciesAsset!, fit: BoxFit.contain),
                       ),
                     )
                   : Padding(

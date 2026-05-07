@@ -8,7 +8,7 @@ import '../../core/theme/app_theme.dart';
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({super.key});
 
-  static const _routes = ['/catches', '/spots', '/trips', '/forecast'];
+  static const _routes = ['/catches', '/spots', '/trips', '/feed'];
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +16,15 @@ class AppBottomNav extends StatelessWidget {
     try {
       location = GoRouterState.of(context).matchedLocation;
     } catch (_) {
+      // GoRouterState ist beim ersten Build nicht immer verfügbar —
+      // dann fallback auf den Router-Delegate-Status.
       try {
-        location =
-            GoRouter.of(context).routerDelegate.currentConfiguration.uri.path;
-      } catch (_) {}
+        location = GoRouter.of(
+          context,
+        ).routerDelegate.currentConfiguration.uri.path;
+      } catch (e) {
+        debugPrint('bottom_nav route lookup: $e');
+      }
     }
     final idx = _routes.indexWhere((r) => location.startsWith(r));
     final c = ApexColors.of(context);
@@ -53,9 +58,9 @@ class AppBottomNav extends StatelessWidget {
             onTap: () => context.go(_routes[2]),
           ),
           _AppNavItem(
-            icon: Icons.bolt_outlined,
-            selectedIcon: Icons.bolt,
-            label: 'Index',
+            icon: Icons.public_outlined,
+            selectedIcon: Icons.public,
+            label: 'Feed',
             selected: idx == 3,
             onTap: () => context.go(_routes[3]),
           ),

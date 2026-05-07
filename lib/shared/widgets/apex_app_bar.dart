@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,16 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../services/app_providers.dart';
 import '../services/firebase/auth_providers.dart';
+import '../services/inbox_providers.dart';
 
 /// Einheitlicher AppBar für die gesamte App: HOOKED Branding + Menü-Button.
 /// Unterstützt zusätzliche Actions links vom Menü und den standardmäßigen
 /// Zurück-Pfeil (automatisch, wenn canPop).
 class ApexAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  const ApexAppBar({
-    super.key,
-    this.extraActions = const [],
-    this.leading,
-  });
+  const ApexAppBar({super.key, this.extraActions = const [], this.leading});
 
   final List<Widget> extraActions;
 
@@ -66,9 +62,59 @@ class ApexAppBar extends ConsumerWidget implements PreferredSizeWidget {
       ),
       actions: [
         ...extraActions,
+        const _AvatarButton(),
         const HeaderMenuButton(),
         const SizedBox(width: 4),
       ],
+    );
+  }
+}
+
+/// Avatar-Button rechts in der AppBar — Tap öffnet das eigene Profil
+/// (oder den Login, falls nicht angemeldet).
+class _AvatarButton extends ConsumerWidget {
+  const _AvatarButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final isLoggedIn = user != null;
+    final photo = user?.photoURL;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          context.push(isLoggedIn ? '/profile' : '/auth');
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: ApexColors.primary.withAlpha(28),
+              border: Border.all(color: ApexColors.primary, width: 1.5),
+              image: photo != null
+                  ? DecorationImage(
+                      image: NetworkImage(photo),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: photo == null
+                ? Icon(
+                    isLoggedIn ? Icons.person : Icons.person_outline,
+                    color: ApexColors.primary,
+                    size: 16,
+                  )
+                : null,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -82,8 +128,19 @@ class HeaderMenuButton extends ConsumerStatefulWidget {
   ConsumerState<HeaderMenuButton> createState() => _HeaderMenuButtonState();
 }
 
-class _HeaderMenuButtonState extends ConsumerState<HeaderMenuButton> {
+class _HeaderMenuButtonState extends ConsumerState<HeaderMenuButton>
+    with SingleTickerProviderStateMixin {
   final GlobalKey _anchor = GlobalKey();
+  late final AnimationController _iconCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  );
+
+  @override
+  void dispose() {
+    _iconCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _open() async {
     HapticFeedback.selectionClick();
@@ -100,13 +157,17 @@ class _HeaderMenuButtonState extends ConsumerState<HeaderMenuButton> {
     try {
       activeRoute = GoRouterState.of(context).matchedLocation;
     } catch (_) {
+      // GoRouterState ist beim ersten Build nicht immer da — fallback.
       try {
         activeRoute = GoRouter.of(
           context,
         ).routerDelegate.currentConfiguration.uri.path;
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('apex_app_bar route lookup: $e');
+      }
     }
 
+    _iconCtrl.forward();
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -128,15 +189,44 @@ class _HeaderMenuButtonState extends ConsumerState<HeaderMenuButton> {
         );
       },
     );
+    if (mounted) _iconCtrl.reverse();
   }
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    final user = ref.watch(currentUserProvider);
+    final unread = user == null ? 0 : ref.watch(inboxUnreadCountProvider);
+    return Stack(
       key: _anchor,
-      tooltip: 'Menü',
-      icon: const Icon(Icons.menu_rounded, color: ApexColors.primary),
-      onPressed: _open,
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          tooltip: 'Menü',
+          iconSize: 34,
+          icon: AnimatedIcon(
+            icon: AnimatedIcons.menu_close,
+            progress: _iconCtrl,
+            color: ApexColors.primary,
+            size: 34,
+          ),
+          onPressed: _open,
+        ),
+        if (unread > 0)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: ApexColors.strike,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -201,9 +291,9 @@ class _MenuPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final c = ApexColors.of(context);
-    final user = ref.watch(currentUserProvider);
-    final isLoggedIn = user != null;
     final route = activeRoute;
+    final user = ref.watch(currentUserProvider);
+    final unread = user == null ? 0 : ref.watch(inboxUnreadCountProvider);
 
     return Material(
       color: c.surface,
@@ -221,17 +311,14 @@ class _MenuPanel extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _ProfileHeader(
-              user: user,
-              isLoggedIn: isLoggedIn,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                Navigator.of(context).pop();
-                context.push(isLoggedIn ? '/profile' : '/auth');
-              },
-            ),
-            Divider(height: 1, thickness: 1, color: c.border),
             const SizedBox(height: 6),
+            _MenuTile(
+              icon: Icons.notifications_none_rounded,
+              label: 'Benachrichtigungen',
+              active: route == '/notifications',
+              badge: unread,
+              onTap: () => _navigate(context, '/notifications'),
+            ),
             _MenuTile(
               icon: Icons.flag_rounded,
               label: 'Missionen',
@@ -300,119 +387,20 @@ class _MenuPanel extends ConsumerWidget {
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({
-    required this.user,
-    required this.isLoggedIn,
-    required this.onTap,
-  });
-
-  final User? user;
-  final bool isLoggedIn;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = ApexColors.of(context);
-    final name = isLoggedIn
-        ? (user?.displayName?.trim().isNotEmpty == true
-              ? user!.displayName!
-              : 'Profil')
-        : 'Nicht angemeldet';
-    final subtitle = isLoggedIn
-        ? (user?.email ?? 'Tippe für dein Profil')
-        : 'Tippen, um dich anzumelden';
-    final photo = isLoggedIn ? user?.photoURL : null;
-    final initials = _initials(name, fallback: isLoggedIn ? '?' : '+');
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: ApexColors.primary.withAlpha(28),
-                border: Border.all(color: ApexColors.primary, width: 2),
-                image: photo != null
-                    ? DecorationImage(
-                        image: NetworkImage(photo),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: photo == null
-                  ? Text(
-                      initials,
-                      style: const TextStyle(
-                        fontFamily: 'Rajdhani',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: ApexColors.primary,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Rajdhani',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: c.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: c.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: c.textMuted, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _initials(String name, {required String fallback}) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return fallback;
-    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.characters.first)
-        .toUpperCase();
-  }
-}
-
 class _MenuTile extends StatelessWidget {
   const _MenuTile({
     required this.icon,
     required this.label,
     required this.active,
     required this.onTap,
+    this.badge = 0,
   });
 
   final IconData icon;
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -445,6 +433,26 @@ class _MenuTile extends StatelessWidget {
                 ),
               ),
             ),
+            if (badge > 0)
+              Container(
+                margin: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: ApexColors.strike,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                child: Text(
+                  badge > 9 ? '9+' : '$badge',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
+                ),
+              ),
             if (active)
               Container(
                 width: 6,

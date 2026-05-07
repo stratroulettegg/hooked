@@ -758,4 +758,3 @@ class _WaterConditionsCardState extends ConsumerState<WaterConditionsCard> {
     );
   }
 }
-

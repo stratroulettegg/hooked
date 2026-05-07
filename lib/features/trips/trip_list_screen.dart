@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -62,11 +63,18 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
           ),
           data: (trips) {
             if (trips.isEmpty) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  _EmptyState(onAdd: () => context.push('/trips/add')),
-                ],
+              // Vertikal zentriert wie Spots/Catches; AlwaysScrollable +
+              // ConstrainedBox damit RefreshIndicator weiterhin reagiert.
+              return LayoutBuilder(
+                builder: (ctx, constraints) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: _EmptyState(onAdd: () => context.push('/trips/add')),
+                  ),
+                ),
               );
             }
             final upcoming = trips.where((t) => t.isUpcoming).toList()
@@ -97,9 +105,8 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
                           confirmTitle: 'Trip löschen?',
                           confirmMessage:
                               'Der Trip „${t.name}“ wird gelöscht. Geteilte Cloud-Daten werden bereinigt.',
-                          onDelete: () => ref
-                              .read(tripProvider.notifier)
-                              .removeTrip(t.id),
+                          onDelete: () =>
+                              ref.read(tripProvider.notifier).removeTrip(t.id),
                           child: _TripCard(trip: t),
                         );
                       },
@@ -126,9 +133,8 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
                           confirmTitle: 'Trip löschen?',
                           confirmMessage:
                               'Der Trip „${t.name}“ wird gelöscht. Geteilte Cloud-Daten werden bereinigt.',
-                          onDelete: () => ref
-                              .read(tripProvider.notifier)
-                              .removeTrip(t.id),
+                          onDelete: () =>
+                              ref.read(tripProvider.notifier).removeTrip(t.id),
                           child: _TripCard(trip: t, faded: true),
                         );
                       },
@@ -158,7 +164,10 @@ class _TripSectionHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     final c = ApexColors.of(context);
     return Container(
       height: _height,
@@ -178,9 +187,7 @@ class _TripSectionHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: Container(height: 1, color: c.border),
-          ),
+          Expanded(child: Container(height: 1, color: c.border)),
           const SizedBox(width: 10),
           Text(
             '$count',
@@ -421,10 +428,18 @@ class _EmptyState extends StatelessWidget {
 // ── Invite-Flow ─────────────────────────────────────────────────────────
 Future<void> _redeemInviteDialog(BuildContext context, WidgetRef ref) async {
   if (!FirebaseBootstrap.isAvailable) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Einladungen benötigen eine Firebase-Konfiguration.'),
-      ),
+    AppToast.error(
+      context,
+      'Einladungen benötigen eine Firebase-Konfiguration.',
+    );
+    return;
+  }
+  // Cloud-Account ist Pflicht — sonst landet der Beitretende als
+  // „Geist" im Trip (Owner sieht ihn nicht in der Teilnehmer-Liste).
+  if (ref.read(currentUserProvider) == null) {
+    AppToast.error(
+      context,
+      'Bitte melde dich an, um eine Einladung einzulösen.',
     );
     return;
   }
@@ -514,22 +529,16 @@ Future<void> _redeemInviteDialog(BuildContext context, WidgetRef ref) async {
     }
     closeSpinner();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Trip „${added.name}" importiert.')));
+    AppToast.success(context, 'Trip „${added.name}" importiert.');
   } on TripInviteException catch (e) {
     closeSpinner();
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      AppToast.error(context, e.message);
     }
   } catch (e) {
     closeSpinner();
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Einlösen fehlgeschlagen: $e')));
+      AppToast.error(context, 'Einlösen fehlgeschlagen: $e');
     }
   }
 }

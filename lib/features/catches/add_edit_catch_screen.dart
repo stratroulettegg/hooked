@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -122,21 +123,14 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_createNewSpot) {
       if (_newSpotNameCtrl.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Bitte einen Spot-Namen eingeben oder “Kein Spot” wählen',
-            ),
-          ),
+        AppToast.error(
+          context,
+          'Bitte einen Spot-Namen eingeben oder “Kein Spot” wählen',
         );
         return;
       }
       if (_newSpotLat == null || _newSpotLng == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bitte Spot-Standort auf der Karte markieren'),
-          ),
-        );
+        AppToast.error(context, 'Bitte Spot-Standort auf der Karte markieren');
         return;
       }
     }
@@ -235,13 +229,12 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         // erlaubt. Sollte der Schalter trotzdem aktiv sein (z.\u202fB. weil
         // ein bestehender Eintrag das Foto verloren hat), wird die
         // Freigabe hier hart deaktiviert.
-        isShared: _isShared
-            && _photoPath != null
-            && _photoPath!.isNotEmpty,
-        shareWater: _isShared
-            && _shareWater
-            && _photoPath != null
-            && _photoPath!.isNotEmpty,
+        isShared: _isShared && _photoPath != null && _photoPath!.isNotEmpty,
+        shareWater:
+            _isShared &&
+            _shareWater &&
+            _photoPath != null &&
+            _photoPath!.isNotEmpty,
       );
 
       if (widget.existing != null) {
@@ -251,11 +244,9 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
       }
       if (mounted) {
         if (autoLinkedSpotName != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('📍 Automatisch mit Spot „$autoLinkedSpotName" verknüpft'),
-              duration: const Duration(seconds: 3),
-            ),
+          AppToast.show(
+            context,
+            '📍 Automatisch mit Spot „$autoLinkedSpotName" verknüpft',
           );
         }
         context.pop();
@@ -300,6 +291,10 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
+          // Tastatur schließt, sobald jemand außerhalb eines Felds tippt
+          // oder die Liste scrollt — verhindert „klebrige" Tastatur,
+          // wenn der User direkt auf einen Button (z. B. Foto) tippt.
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
             // Zielfisch
             _SectionLabel('ZIELFISCH'),
@@ -472,14 +467,12 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
             _CommunityShareCard(
               isShared: _isShared,
               shareWater: _shareWater,
-              hasPhoto:
-                  _photoPath != null && _photoPath!.isNotEmpty,
+              hasPhoto: _photoPath != null && _photoPath!.isNotEmpty,
               onSharedChanged: (v) => setState(() {
                 _isShared = v;
                 if (!v) _shareWater = false;
               }),
-              onShareWaterChanged: (v) =>
-                  setState(() => _shareWater = v),
+              onShareWaterChanged: (v) => setState(() => _shareWater = v),
             ),
             const SizedBox(height: 32),
           ],
@@ -926,7 +919,10 @@ class _SpotSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (spotId == null && !createNew && catchLat != null && catchLng != null) ...[
+        if (spotId == null &&
+            !createNew &&
+            catchLat != null &&
+            catchLng != null) ...[
           _CreateSpotFromCatchHint(
             onTap: () {
               onLocation(catchLat!, catchLng!);
@@ -1095,10 +1091,9 @@ class _SpotSection extends ConsumerWidget {
     String? current,
   ) async {
     if (spots.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Noch keine Spots angelegt – nutze „+ Neu anlegen“'),
-        ),
+      AppToast.show(
+        context,
+        'Noch keine Spots angelegt – nutze „+ Neu anlegen“',
       );
       return null;
     }
@@ -1393,10 +1388,7 @@ class _CreateSpotFromCatchHint extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right,
-                color: ApexColors.primary,
-              ),
+              const Icon(Icons.chevron_right, color: ApexColors.primary),
             ],
           ),
         ),
@@ -1408,10 +1400,7 @@ class _CreateSpotFromCatchHint extends StatelessWidget {
 /// Zeigt eine Reihe von Chips mit den 3 zuletzt am häufigsten verwendeten
 /// Ködern. Tap füllt das Köder-Feld direkt — spart Tippen bei Routine-Setups.
 class _RecentLuresChips extends ConsumerWidget {
-  const _RecentLuresChips({
-    required this.currentValue,
-    required this.onPick,
-  });
+  const _RecentLuresChips({required this.currentValue, required this.onPick});
 
   final String currentValue;
   final void Function(String lure) onPick;
@@ -1419,7 +1408,8 @@ class _RecentLuresChips extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ApexColors.of(context);
-    final catches = ref.watch(catchProvider).valueOrNull ?? const <CatchEntry>[];
+    final catches =
+        ref.watch(catchProvider).valueOrNull ?? const <CatchEntry>[];
 
     // Häufigkeit der letzten ~50 Einträge zählen, leere ignorieren.
     final recent = catches.take(50);
@@ -1470,15 +1460,9 @@ class _RecentLureChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? ApexColors.primary.withAlpha(40)
-          : color.surface,
+      color: selected ? ApexColors.primary.withAlpha(40) : color.surface,
       shape: StadiumBorder(
-        side: BorderSide(
-          color: selected
-              ? ApexColors.primary
-              : color.border,
-        ),
+        side: BorderSide(color: selected ? ApexColors.primary : color.border),
       ),
       child: InkWell(
         onTap: onTap,
@@ -1602,14 +1586,10 @@ class _CommunityShareCard extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: activelyShared
-            ? ApexColors.primary.withAlpha(20)
-            : c.surface,
+        color: activelyShared ? ApexColors.primary.withAlpha(20) : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: activelyShared
-              ? ApexColors.primary.withAlpha(120)
-              : c.border,
+          color: activelyShared ? ApexColors.primary.withAlpha(120) : c.border,
           width: activelyShared ? 1.2 : 1,
         ),
       ),
@@ -1637,13 +1617,9 @@ class _CommunityShareCard extends StatelessWidget {
                   child: Icon(
                     disabled
                         ? Icons.no_photography_outlined
-                        : (activelyShared
-                            ? Icons.public
-                            : Icons.lock_outline),
+                        : (activelyShared ? Icons.public : Icons.lock_outline),
                     size: 18,
-                    color: activelyShared
-                        ? ApexColors.primary
-                        : c.textMuted,
+                    color: activelyShared ? ApexColors.primary : c.textMuted,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1656,9 +1632,7 @@ class _CommunityShareCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: disabled
-                              ? c.textMuted
-                              : c.textPrimary,
+                          color: disabled ? c.textMuted : c.textPrimary,
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -1667,8 +1641,8 @@ class _CommunityShareCard extends StatelessWidget {
                         disabled
                             ? 'Lade ein Foto deines Fangs hoch, um ihn zu teilen'
                             : (activelyShared
-                                ? 'Andere Angler:innen sehen Foto, Art & Maße'
-                                : 'Bleibt nur in deinem privaten Fangbuch'),
+                                  ? 'Andere Angler:innen sehen Foto, Art & Maße'
+                                  : 'Bleibt nur in deinem privaten Fangbuch'),
                         style: TextStyle(
                           fontSize: 12,
                           color: c.textMuted,
@@ -1698,15 +1672,12 @@ class _CommunityShareCard extends StatelessWidget {
                         color: ApexColors.primary.withAlpha(60),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                            14, 10, 14, 12),
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
                         child: Row(
                           children: [
                             const SizedBox(width: 4),
                             Icon(
-                              shareWater
-                                  ? Icons.water
-                                  : Icons.water_outlined,
+                              shareWater ? Icons.water : Icons.water_outlined,
                               size: 18,
                               color: shareWater
                                   ? ApexColors.primary
@@ -1715,8 +1686,7 @@ class _CommunityShareCard extends StatelessWidget {
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     'Gewässer-Name mit teilen',

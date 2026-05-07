@@ -62,10 +62,7 @@ class ModerationService {
   }
 
   /// Meldet einen Nutzer (z. B. aus einer Profilansicht heraus).
-  Future<void> reportUser({
-    required String targetUid,
-    required String reason,
-  }) {
+  Future<void> reportUser({required String targetUid, required String reason}) {
     return _createReport(
       targetType: ReportTargetType.user,
       targetUid: targetUid,
@@ -87,8 +84,9 @@ class ModerationService {
     // Defensiv: Maximallänge für `reason` erzwingen — die Rules
     // begrenzen ohnehin auf < 500 Zeichen, hier kürzen wir freundlich.
     final trimmed = reason.trim();
-    final clipped =
-        trimmed.length > 480 ? '${trimmed.substring(0, 480)}…' : trimmed;
+    final clipped = trimmed.length > 480
+        ? '${trimmed.substring(0, 480)}…'
+        : trimmed;
 
     await _db.collection('reports').add({
       'reporterUid': user.uid,
@@ -115,11 +113,15 @@ class ModerationService {
       if (user == null) {
         return Stream<Set<String>>.value(const <String>{});
       }
-      return _myBlockDoc(user.uid).snapshots().map((snap) {
-        final list = (snap.data()?['blocked'] as List?)?.cast<String>() ??
-            const <String>[];
-        return list.toSet();
-      }).handleError((Object _, StackTrace __) {});
+      return _myBlockDoc(user.uid)
+          .snapshots()
+          .map((snap) {
+            final list =
+                (snap.data()?['blocked'] as List?)?.cast<String>() ??
+                const <String>[];
+            return list.toSet();
+          })
+          .handleError((Object _, StackTrace __) {});
     });
   }
 
@@ -178,4 +180,5 @@ class ModerationService {
 class RateLimitHit {
   final String kind; // 'posts' | 'comments' | 'reports'
   final DateTime at;
-  const RateLimitHit({required this.kind, required this.at});}
+  const RateLimitHit({required this.kind, required this.at});
+}

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../models/catch_entry.dart';
 import '../../models/fishing_spot.dart';
@@ -211,7 +214,9 @@ class FeedService {
 
     try {
       await _db.collection('feed').doc(catchId).delete();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('feed delete doc: $e');
+    }
 
     if (hadPhoto) {
       try {
@@ -245,9 +250,8 @@ class FeedService {
           .limit(limit)
           .snapshots()
           .map(
-            (snap) => snap.docs
-                .map((d) => FeedPost.fromMap(d.id, d.data()))
-                .toList(),
+            (snap) =>
+                snap.docs.map((d) => FeedPost.fromMap(d.id, d.data())).toList(),
           )
           .handleError((Object e, StackTrace st) {
             // Wenn Logout direkt nach onAuthStateChanged passiert und der
@@ -310,9 +314,7 @@ class FeedService {
       'createdAt': FieldValue.serverTimestamp(),
       if (parentId != null) 'parentId': parentId,
     });
-    batch.update(postRef, {
-      'commentCount': FieldValue.increment(1),
-    });
+    batch.update(postRef, {'commentCount': FieldValue.increment(1)});
     await batch.commit();
   }
 
@@ -326,9 +328,7 @@ class FeedService {
     final commentRef = postRef.collection('comments').doc(commentId);
     final batch = _db.batch();
     batch.delete(commentRef);
-    batch.update(postRef, {
-      'commentCount': FieldValue.increment(-1),
-    });
+    batch.update(postRef, {'commentCount': FieldValue.increment(-1)});
     try {
       await batch.commit();
     } catch (_) {
@@ -352,11 +352,116 @@ class FeedService {
           .where('userId', isEqualTo: user.uid)
           .snapshots()
           .map(
-            (snap) => snap.docs
-                .map((d) => FeedPost.fromMap(d.id, d.data()))
-                .toList(),
+            (snap) =>
+                snap.docs.map((d) => FeedPost.fromMap(d.id, d.data())).toList(),
           )
           .handleError((Object e, StackTrace st) {});
+    });
+  }
+
+  /// Stream der Posts eines bestimmten Users (z. B. für Public-Profile).
+  Stream<List<FeedPost>> watchUserFeed(String userId, {int limit = 60}) {
+    if (!FirebaseBootstrap.isAvailable) {
+      return const Stream<List<FeedPost>>.empty();
+    }
+    return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+      if (user == null) {
+        return Stream<List<FeedPost>>.value(const []);
+      }
+      return _db
+          .collection('feed')
+          .where('userId', isEqualTo: userId)
+          .snapshots()
+          .map((snap) {
+            final list =
+                snap.docs
+                    .map((d) => FeedPost.fromMap(d.id, d.data()))
+                    .where((p) => !p.hidden)
+                    .toList()
+                  ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            return list.take(limit).toList();
+          })
+          .handleError((Object e, StackTrace st) {});
+    });
+  }
+
+  /// Stream der neuen Posts gefolgter User seit `since`. Wird für die
+  /// Bell-Badge in der AppBar verwendet.
+  ///
+  /// Nutzt Firestores `whereIn` (max 30 IDs pro Query) — bei mehr Follows
+  /// werden parallele Sub-Queries angestoßen und client-seitig gemerged.
+  /// Das ist linear in der Anzahl der 30er-Chunks: bis ~150 Follows
+  /// (=5 Sub-Queries) bleibt das problemlos. Für virale Power-User wäre
+  /// ein Cloud-Function-Fanout das nächste Upgrade.
+  Stream<List<FeedPost>> watchFollowingFeedSince(
+    Set<String> followingUids,
+    DateTime since, {
+    int limitPerChunk = 30,
+  }) {
+    if (!FirebaseBootstrap.isAvailable || followingUids.isEmpty) {
+      return Stream<List<FeedPost>>.value(const []);
+    }
+    return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+      if (user == null) {
+        return Stream<List<FeedPost>>.value(const []);
+      }
+      // 30er-Chunks (Firestore whereIn-Limit).
+      final chunks = <List<String>>[];
+      final list = followingUids.where((u) => u != user.uid).toList();
+      for (var i = 0; i < list.length; i += 30) {
+        chunks.add(list.sublist(i, (i + 30).clamp(0, list.length)));
+      }
+      if (chunks.isEmpty) {
+        return Stream<List<FeedPost>>.value(const []);
+      }
+      // Mehrere Streams in einem Multi-Stream zusammenfassen — wir
+      // halten je Chunk den letzten Snapshot und mergen bei Updates.
+      final controller = StreamController<List<FeedPost>>.broadcast();
+      final latest = List<List<FeedPost>>.filled(chunks.length, const []);
+      final subs = <StreamSubscription>[];
+      void emit() {
+        final merged = <String, FeedPost>{};
+        for (final list in latest) {
+          for (final p in list) {
+            if (p.hidden) continue;
+            if (!p.createdAt.isAfter(since)) continue;
+            merged[p.id] = p;
+          }
+        }
+        final all = merged.values.toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        controller.add(all);
+      }
+
+      for (var i = 0; i < chunks.length; i++) {
+        final chunk = chunks[i];
+        final query = _db
+            .collection('feed')
+            .where('userId', whereIn: chunk)
+            .where('createdAt', isGreaterThan: Timestamp.fromDate(since))
+            .orderBy('createdAt', descending: true)
+            .limit(limitPerChunk);
+        final sub = query.snapshots().listen(
+          (snap) {
+            latest[i] = snap.docs
+                .map((d) => FeedPost.fromMap(d.id, d.data()))
+                .toList();
+            emit();
+          },
+          onError: (Object e, StackTrace st) {
+            // Permission-denied bei Logout o.ä. — Chunk leer halten.
+            latest[i] = const [];
+            emit();
+          },
+        );
+        subs.add(sub);
+      }
+      controller.onCancel = () async {
+        for (final s in subs) {
+          await s.cancel();
+        }
+      };
+      return controller.stream;
     });
   }
 

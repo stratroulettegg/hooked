@@ -215,8 +215,7 @@ class _PbCard extends StatelessWidget {
   const _PbCard({required this.event});
   final PbEvent event;
 
-  String _formatWeight(int g) =>
-      g >= 1000 ? AppNum.kg(g) : '$g g';
+  String _formatWeight(int g) => g >= 1000 ? AppNum.kg(g) : '$g g';
 
   @override
   Widget build(BuildContext context) {

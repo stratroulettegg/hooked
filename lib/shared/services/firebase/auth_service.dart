@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../utils/image_compression.dart';
@@ -19,7 +20,7 @@ class AuthResult {
   const AuthResult.success(this.user) : errorCode = null, errorMessage = null;
   const AuthResult.failure(this.errorCode, this.errorMessage) : user = null;
 
-  bool get isSuccess => user != null;
+  bool get isSuccess => errorCode == null;
 }
 
 /// Wrapper um FirebaseAuth mit den drei Providern Apple, Google, E-Mail.
@@ -90,9 +91,11 @@ class AuthService {
         nonce: hashedNonce,
       );
 
-      final oauth = OAuthProvider(
-        'apple.com',
-      ).credential(idToken: appleCred.identityToken, rawNonce: rawNonce);
+      final oauth = OAuthProvider('apple.com').credential(
+        idToken: appleCred.identityToken,
+        rawNonce: rawNonce,
+        accessToken: appleCred.authorizationCode,
+      );
       final cred = await _auth.signInWithCredential(oauth);
 
       // Apple liefert den Namen nur beim allerersten Login \u2014 jetzt persistieren.
@@ -107,10 +110,28 @@ class AuthService {
       }
       return AuthResult.success(_auth.currentUser);
     } on SignInWithAppleAuthorizationException catch (e) {
-      return AuthResult.failure(e.code.name, e.message);
+      debugPrint('Apple Sign-In failed: code=${e.code.name} msg=${e.message}');
+      // canceled → still still rendern, sonst freundliche Meldung.
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return const AuthResult.failure('cancelled', 'Anmeldung abgebrochen.');
+      }
+      final friendly = switch (e.code) {
+        AuthorizationErrorCode.notHandled =>
+          'Apple konnte die Anmeldung nicht verarbeiten. Bitte später erneut versuchen.',
+        AuthorizationErrorCode.failed =>
+          'Apple-Anmeldung fehlgeschlagen. Stelle sicher, dass „Mit Apple anmelden" für diese App aktiviert ist (Entwickler-Konto + App-ID-Capability).',
+        AuthorizationErrorCode.invalidResponse =>
+          'Ungültige Antwort von Apple. Bitte erneut versuchen.',
+        AuthorizationErrorCode.unknown =>
+          'Apple-Anmeldung fehlgeschlagen (Code 1000). Häufige Ursachen: fehlendes Entitlement im Build, Apple-ID nicht eingerichtet oder Capability im Apple-Developer-Portal nicht aktiv.',
+        _ => e.message,
+      };
+      return AuthResult.failure(e.code.name, friendly);
     } on FirebaseAuthException catch (e) {
+      debugPrint('Apple→Firebase failed: code=${e.code} msg=${e.message}');
       return AuthResult.failure(e.code, _readableMessage(e));
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Apple Sign-In unknown error: $e\n$st');
       return AuthResult.failure('unknown', e.toString());
     }
   }
@@ -147,10 +168,7 @@ class AuthService {
             .ref()
             .child('profilePhotos')
             .child('${user.uid}.jpg');
-        await ref.putData(
-          bytes,
-          SettableMetadata(contentType: 'image/jpeg'),
-        );
+        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
         final url = await ref.getDownloadURL();
         await user.updatePhotoURL(url);
       } else if (removePhoto) {
@@ -180,7 +198,9 @@ class AuthService {
     if (!FirebaseBootstrap.isAvailable) return;
     try {
       await GoogleSignIn().signOut();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('auth GoogleSignIn signOut: $e');
+    }
     await _auth.signOut();
   }
 
@@ -195,24 +215,83 @@ class AuthService {
     if (user == null) {
       return const AuthResult.failure('no-user', 'Nicht angemeldet');
     }
+    Object? caughtError;
     try {
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-          .httpsCallable('deleteUserAccount');
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'europe-west3',
+      ).httpsCallable('deleteUserAccount');
       await callable.call<Map<String, dynamic>>();
-      // Auth-User ist serverseitig schon weg → lokale Session beenden.
-      try {
-        await GoogleSignIn().signOut();
-      } catch (_) {}
-      try {
-        await _auth.signOut();
-      } catch (_) {}
-      return const AuthResult.success(null);
-    } on FirebaseFunctionsException catch (e) {
-      return AuthResult.failure(e.code, e.message ?? 'Account-Löschung fehlgeschlagen.');
-    } on FirebaseAuthException catch (e) {
-      return AuthResult.failure(e.code, _readableMessage(e));
     } catch (e) {
-      return AuthResult.failure('unknown', e.toString());
+      // Race-Condition: die Cloud-Function löscht den Auth-User
+      // serverseitig, dadurch wird unser ID-Token ungültig BEVOR die
+      // HTTP-Antwort durchkommt. Ergebnis: typischerweise
+      // `unauthenticated` oder `internal`, obwohl serverseitig alles
+      // erfolgreich war. Wir verifizieren unten per reload().
+      caughtError = e;
+    }
+
+    // Verifizieren: existiert der User serverseitig noch?
+    final gone = await _userIsGone(user);
+    await _signOutLocal();
+
+    if (caughtError == null || gone) {
+      return const AuthResult.success(null);
+    }
+
+    if (caughtError is FirebaseFunctionsException) {
+      return AuthResult.failure(
+        caughtError.code,
+        caughtError.message ?? 'Account-Löschung fehlgeschlagen.',
+      );
+    }
+    if (caughtError is FirebaseAuthException) {
+      return AuthResult.failure(
+        caughtError.code,
+        _readableMessage(caughtError),
+      );
+    }
+    return AuthResult.failure('unknown', caughtError.toString());
+  }
+
+  /// Prüft via Token-Reload, ob der angegebene User serverseitig schon
+  /// gelöscht ist. Gibt true zurück, wenn das Token nicht mehr gültig
+  /// ist — egal aus welchem Grund. Konservativ: bei Netzwerkfehlern
+  /// ebenfalls true, weil wir dann nichts Sinnvolles mehr beweisen
+  /// können und der User-Pfad „Function lief, dann Netz weg" sonst
+  /// fälschlich als Fehler endet.
+  Future<bool> _userIsGone(User user) async {
+    try {
+      await user.reload();
+      // reload erfolgreich → User existiert noch
+      return false;
+    } on FirebaseAuthException catch (e) {
+      const goneCodes = {
+        'user-not-found',
+        'user-token-expired',
+        'invalid-user-token',
+        'user-disabled',
+        'requires-recent-login',
+      };
+      // Token ungültig → Account ist serverseitig weg.
+      return goneCodes.contains(e.code) || e.code.contains('token');
+    } catch (_) {
+      // Z.B. PlatformException ohne klaren Code: konservativ als
+      // "Account vermutlich weg" einstufen, damit kein falscher
+      // Fehler-SnackBar erscheint.
+      return true;
+    }
+  }
+
+  Future<void> _signOutLocal() async {
+    try {
+      await GoogleSignIn().signOut();
+    } catch (e) {
+      debugPrint('auth GoogleSignIn signOut (local): $e');
+    }
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint('auth FirebaseAuth signOut (local): $e');
     }
   }
 
@@ -243,9 +322,9 @@ class AuthService {
       case 'network-request-failed':
         return 'Keine Internetverbindung.';
       case 'requires-recent-login':
-        return 'Bitte melde dich zur Bestaetigung noch einmal an.';
+        return 'Bitte melde dich zur Bestätigung noch einmal an.';
       case 'too-many-requests':
-        return 'Zu viele Versuche — bitte spaeter erneut versuchen.';
+        return 'Zu viele Versuche — bitte später erneut versuchen.';
       default:
         return e.message ?? e.code;
     }

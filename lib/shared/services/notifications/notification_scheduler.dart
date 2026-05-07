@@ -47,8 +47,7 @@ class NotificationScheduler {
     }
   }
 
-  Future<void> cancelTrip(String tripId) =>
-      _svc.cancelTripReminders(tripId);
+  Future<void> cancelTrip(String tripId) => _svc.cancelTripReminders(tripId);
 
   // ─── Reaktive Checks (App-Start) ──────────────────────────────────────────
 
@@ -194,10 +193,7 @@ class NotificationScheduler {
 
   // ─── Wochen-Recap ─────────────────────────────────────────────────────────
 
-  Future<void> _checkWeeklyRecap(
-    List<CatchEntry> catches,
-    DateTime now,
-  ) async {
+  Future<void> _checkWeeklyRecap(List<CatchEntry> catches, DateTime now) async {
     if (now.weekday != DateTime.sunday) return;
     if (now.hour < 19 || now.hour >= 21) return;
     final today = DateTime(now.year, now.month, now.day);
@@ -207,17 +203,13 @@ class NotificationScheduler {
       return !c.caughtAt.isBefore(weekStart) && c.caughtAt.isBefore(weekEnd);
     }).toList();
     final daysWithCatch = inWeek
-        .map((c) => DateTime(
-              c.caughtAt.year,
-              c.caughtAt.month,
-              c.caughtAt.day,
-            ))
+        .map((c) => DateTime(c.caughtAt.year, c.caughtAt.month, c.caughtAt.day))
         .toSet()
         .length;
     final body = inWeek.isEmpty
         ? 'Diese Woche: 0 Fänge — neuer Anlauf nächste Woche?'
         : 'Diese Woche: ${inWeek.length} Fänge an $daysWithCatch '
-            '${daysWithCatch == 1 ? "Tag" : "Tagen"}. Tap für Details.';
+              '${daysWithCatch == 1 ? "Tag" : "Tagen"}. Tap für Details.';
     await _svc.showWeeklyRecap(body: body);
   }
 }

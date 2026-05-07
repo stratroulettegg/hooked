@@ -26,7 +26,10 @@ abstract class MapTiles {
 class TileCacheService {
   static TileCacheService? _instance;
   static TileCacheService get instance {
-    assert(_instance != null, 'TileCacheService.init() muss zuerst aufgerufen werden');
+    assert(
+      _instance != null,
+      'TileCacheService.init() muss zuerst aufgerufen werden',
+    );
     return _instance!;
   }
 
@@ -50,18 +53,16 @@ class TileCacheService {
   /// pro Rebuild ein neuer Dio-Client/Interceptor entsteht (Verbindungs-Pool-
   /// Churn → seltene "Tiles laden nicht"-Effekte unter Last).
   CachedTileProvider get provider => _provider ??= CachedTileProvider(
-        store: _store,
-        maxStale: const Duration(days: 30),
-        dio: Dio(
-          BaseOptions(
-            connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 10),
-            headers: const {
-              'User-Agent': 'de.apex.hooked/1.0 (Flutter)',
-            },
-          ),
-        ),
-      );
+    store: _store,
+    maxStale: const Duration(days: 30),
+    dio: Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        headers: const {'User-Agent': 'de.apex.hooked/1.0 (Flutter)'},
+      ),
+    ),
+  );
 
   /// Lädt alle Tiles für einen Spot vor (~10–15 MB, Zoom 10–15, ±0.05°).
   Future<void> downloadForSpot({
@@ -96,8 +97,10 @@ class TileCacheService {
       final url =
           'https://$subdomain.basemaps.cartocdn.com/$style/${t.z}/${t.x}/${t.y}@2x.png';
       try {
-        await dio.get<List<int>>(url,
-            options: Options(responseType: ResponseType.bytes));
+        await dio.get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+        );
       } catch (_) {
         // Einzelne Tiles können fehlschlagen — kein Abbruch
       }
@@ -129,9 +132,10 @@ class TileCacheService {
 
   int _latY(double lat, int z) {
     final r = lat * pi / 180;
-    return ((1 - log(tan(r) + 1 / cos(r)) / pi) / 2 * (1 << z))
-        .floor()
-        .clamp(0, (1 << z) - 1);
+    return ((1 - log(tan(r) + 1 / cos(r)) / pi) / 2 * (1 << z)).floor().clamp(
+      0,
+      (1 << z) - 1,
+    );
   }
 }
 

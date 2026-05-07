@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'app_toast.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../services/app_paths.dart';
+import '../utils/permission_dialogs.dart';
 
 /// Wiederverwendbares Bild-Auswahlfeld für Fang & Spot.
 ///
@@ -54,10 +56,11 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
       // Nur Dateinamen persistieren – absoluter Pfad ist auf iOS instabil
       widget.onChanged(fileName);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Foto konnte nicht geladen werden: $e')),
-        );
+      if (!mounted) return;
+      if (PermissionDialogs.isPermissionDenied(e)) {
+        await PermissionDialogs.showPermissionDeniedDialog(context, e);
+      } else if (mounted) {
+        AppToast.error(context, 'Foto konnte nicht geladen werden: $e');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -65,6 +68,9 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
   }
 
   Future<void> _chooseSource() async {
+    // Tastatur erst sicher schließen, bevor das BottomSheet öffnet —
+    // sonst bleibt sie nach dem Tap auf das Foto-Feld stehen.
+    FocusManager.instance.primaryFocus?.unfocus();
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: ApexColors.of(context).surface,

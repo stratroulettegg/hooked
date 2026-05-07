@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -83,11 +84,7 @@ class _AddEditSpotScreenState extends ConsumerState<AddEditSpotScreen> {
     if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
     if (_lat == null || _lng == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bitte einen Standort auf der Karte markieren'),
-        ),
-      );
+      AppToast.error(context, 'Bitte einen Standort auf der Karte markieren');
       return;
     }
     setState(() => _loading = true);

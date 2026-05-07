@@ -479,10 +479,13 @@ export const deleteUserAccount = onCall(
     await db.recursiveDelete(db.collection("userBlocks").doc(uid)).catch(() => undefined);
     await db.recursiveDelete(db.collection("userMeta").doc(uid)).catch(() => undefined);
 
-    // 7) Storage: feedPhotos/{uid}/** löschen.
+    // 7) Storage: feedPhotos/{uid}/** + profilePhotos/{uid}.* löschen.
     try {
       const bucket = getStorage().bucket();
       await bucket.deleteFiles({ prefix: `feedPhotos/${uid}/` });
+      // Profilbild liegt als `profilePhotos/{uid}.jpg` (oder ggf. .png)
+      // direkt im Prefix — `deleteFiles` mit Prefix matcht alle Endungen.
+      await bucket.deleteFiles({ prefix: `profilePhotos/${uid}` });
     } catch (e) {
       logger.warn("Storage cleanup failed", { uid, error: String(e) });
     }

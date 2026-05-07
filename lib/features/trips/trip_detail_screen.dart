@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/app_toast.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -323,16 +324,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
     } on TripInviteException catch (e) {
       if (context.mounted) closeSpinner();
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        AppToast.error(context, e.message);
       }
     } catch (e) {
       if (context.mounted) closeSpinner();
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Einladung fehlgeschlagen: $e')));
+        AppToast.error(context, 'Einladung fehlgeschlagen: $e');
       }
     }
   }

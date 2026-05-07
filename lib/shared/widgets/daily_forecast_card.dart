@@ -174,7 +174,9 @@ class DailyForecastCard extends ConsumerWidget {
                         ? AppNum.mm(liveWeather!.precipitationMm!)
                         : (f.precipitationSumMm != null
                               ? AppNum.mm(f.precipitationSumMm!) +
-                                    (f.precipitationProbabilityMaxPct != null ? ' · ${f.precipitationProbabilityMaxPct!.round()}%' : '')
+                                    (f.precipitationProbabilityMaxPct != null
+                                        ? ' · ${f.precipitationProbabilityMaxPct!.round()}%'
+                                        : '')
                               : '–'),
                   ),
                   if (liveTrend3hHpa != null)

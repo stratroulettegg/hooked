@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../core/engines/predator_score_engine.dart';
 import '../models/trip.dart';
@@ -136,7 +137,9 @@ class WeatherService {
             pressureTrend = pressures.last - pressures.first;
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('weather pressure parse: $e');
+      }
 
       return DailyForecast(
         date: target,

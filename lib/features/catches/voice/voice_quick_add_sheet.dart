@@ -15,6 +15,7 @@ import '../../../core/format/app_formats.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/catch_entry.dart';
 import '../../../shared/services/app_providers.dart';
+import '../../../shared/utils/permission_dialogs.dart';
 import 'voice_catch_parser.dart';
 
 /// Voice-Quick-Add für Fänge — Look-and-feel einer Sprachnachricht.
@@ -35,8 +36,7 @@ class VoiceQuickAddSheet extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<VoiceQuickAddSheet> createState() =>
-      _VoiceQuickAddSheetState();
+  ConsumerState<VoiceQuickAddSheet> createState() => _VoiceQuickAddSheetState();
 }
 
 enum _Stage { ready, listening, parsed, error, denied }
@@ -51,6 +51,7 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
   Timer? _autoStopTimer;
   Timer? _hintTimer;
   bool _showHint = false;
+  bool _flashGreen = false;
 
   // Android-Workaround: der System-Recognizer stoppt nach ~2–5 s Stille,
   // unabhängig von pauseFor. Wir starten automatisch neu und akkumulieren
@@ -121,7 +122,8 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
         // 'error_no_match' und 'error_speech_timeout' sind auf Android normal
         // bei kurzen Pausen — kein echter Fehler, wird über Restart behandelt.
         if (!mounted) return;
-        final ignorable = err.errorMsg == 'error_no_match' ||
+        final ignorable =
+            err.errorMsg == 'error_no_match' ||
             err.errorMsg == 'error_speech_timeout' ||
             err.errorMsg == 'error_recognizer_busy';
         if (ignorable) return;
@@ -218,7 +220,8 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
     final parsed = VoiceCatchParser.parse(_transcript);
     // Erfolgs-Haptik, wenn wir mindestens eine Spezies oder eine Zahl
     // erkannt haben — sonst dezenter Selection-Click.
-    final hasUseful = parsed.species != null ||
+    final hasUseful =
+        parsed.species != null ||
         parsed.lengthCm != null ||
         parsed.weightG != null;
     HapticFeedback.mediumImpact();
@@ -230,6 +233,12 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
       _parsed = parsed;
       _stage = _Stage.parsed;
       _showHint = false;
+      if (hasUseful) {
+        _flashGreen = true;
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (mounted) setState(() => _flashGreen = false);
+        });
+      }
     });
   }
 
@@ -315,12 +324,17 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: Container(
+        child: AnimatedContainer(
           margin: const EdgeInsets.all(12),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: c.surface,
+            color: _flashGreen ? ApexColors.primary.withAlpha(20) : c.surface,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: c.border, width: 1),
+            border: Border.all(
+              color: _flashGreen ? ApexColors.primary : c.border,
+              width: _flashGreen ? 2 : 1,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -391,10 +405,7 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
   Widget _buildStageContent(ApexColors c) {
     switch (_stage) {
       case _Stage.ready:
-        return _MicButton(
-          listening: false,
-          onTap: _startListening,
-        );
+        return _MicButton(listening: false, onTap: _startListening);
       case _Stage.listening:
         return Column(
           children: [
@@ -421,11 +432,7 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
       case _Stage.denied:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Icon(
-            Icons.mic_off,
-            size: 48,
-            color: c.textMuted,
-          ),
+          child: Icon(Icons.mic_off, size: 48, color: c.textMuted),
         );
     }
   }
@@ -512,15 +519,22 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
               onPressed: () => Navigator.pop(context),
               child: const Text('Schließen'),
             ),
-            FilledButton(
-              onPressed: () {
-                setState(() {
-                  _stage = _Stage.ready;
-                  _errorMessage = null;
-                });
-              },
-              child: const Text('Erneut versuchen'),
-            ),
+            if (_stage == _Stage.denied)
+              FilledButton.icon(
+                onPressed: () => PermissionDialogs.openSettings(),
+                icon: const Icon(Icons.settings_outlined, size: 18),
+                label: const Text('Einstellungen'),
+              )
+            else
+              FilledButton(
+                onPressed: () {
+                  setState(() {
+                    _stage = _Stage.ready;
+                    _errorMessage = null;
+                  });
+                },
+                child: const Text('Erneut versuchen'),
+              ),
           ],
         );
     }
@@ -548,10 +562,7 @@ class _MicButton extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  ApexColors.primary,
-                  ApexColors.primary.withAlpha(180),
-                ],
+                colors: [ApexColors.primary, ApexColors.primary.withAlpha(180)],
               ),
               boxShadow: [
                 BoxShadow(
@@ -631,8 +642,8 @@ class _WaveformState extends State<_Waveform>
     if (widget.transcriptLength != _lastTranscriptLength) {
       final delta = (widget.transcriptLength - _lastTranscriptLength).abs();
       _activity = math.min(1.0, _activity + 0.4 + delta * 0.03);
-      _lastTranscriptChangeMs =
-          DateTime.now().millisecondsSinceEpoch.toDouble();
+      _lastTranscriptChangeMs = DateTime.now().millisecondsSinceEpoch
+          .toDouble();
       _lastTranscriptLength = widget.transcriptLength;
     }
   }
@@ -714,8 +725,7 @@ class _WaveformPainter extends CustomPainter {
     final maxH = size.height * 0.92;
 
     final paintActive = Paint()..color = ApexColors.primary;
-    final paintIdle = Paint()
-      ..color = ApexColors.primary.withAlpha(70);
+    final paintIdle = Paint()..color = ApexColors.primary.withAlpha(70);
 
     for (int i = 0; i < barCount; i++) {
       final v = bars[i];
@@ -774,36 +784,44 @@ class _ParsedSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final chips = <Widget>[];
     if (parsed.species != null) {
-      chips.add(_chip(
-        '${parsed.species!.emoji}  ${parsed.species!.displayName}',
-        bg: ApexColors.primary,
-        fg: Colors.black,
-      ));
+      chips.add(
+        _chip(
+          '${parsed.species!.emoji}  ${parsed.species!.displayName}',
+          bg: ApexColors.primary,
+          fg: Colors.black,
+        ),
+      );
     }
     if (parsed.lengthCm != null) {
-      chips.add(_chip(
-        AppNum.cm(parsed.lengthCm!),
-        bg: color.surface,
-        fg: color.textPrimary,
-        border: color.border,
-      ));
+      chips.add(
+        _chip(
+          AppNum.cm(parsed.lengthCm!),
+          bg: color.surface,
+          fg: color.textPrimary,
+          border: color.border,
+        ),
+      );
     }
     if (parsed.weightG != null) {
       final w = parsed.weightG!;
-      chips.add(_chip(
-        AppNum.kg(w),
-        bg: color.surface,
-        fg: color.textPrimary,
-        border: color.border,
-      ));
+      chips.add(
+        _chip(
+          AppNum.kg(w),
+          bg: color.surface,
+          fg: color.textPrimary,
+          border: color.border,
+        ),
+      );
     }
     if (hasLocation) {
-      chips.add(_chip(
-        '📍 Standort',
-        bg: color.surface,
-        fg: color.textPrimary,
-        border: color.border,
-      ));
+      chips.add(
+        _chip(
+          '📍 Standort',
+          bg: color.surface,
+          fg: color.textPrimary,
+          border: color.border,
+        ),
+      );
     }
 
     return Column(
@@ -848,8 +866,12 @@ class _ParsedSummary extends StatelessWidget {
     );
   }
 
-  Widget _chip(String text,
-      {required Color bg, required Color fg, Color? border}) {
+  Widget _chip(
+    String text, {
+    required Color bg,
+    required Color fg,
+    Color? border,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -891,8 +913,11 @@ class _SpeakingHint extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.lightbulb_outline,
-                color: ApexColors.primary, size: 18),
+            const Icon(
+              Icons.lightbulb_outline,
+              color: ApexColors.primary,
+              size: 18,
+            ),
             const SizedBox(width: 10),
             Flexible(
               child: Text(

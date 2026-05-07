@@ -68,7 +68,8 @@ class VoiceCatchParser {
     final normalized = _normalizeNumbers(lower);
 
     final species = _findSpecies(lower);
-    final lengthCm = _findLengthCm(normalized) ?? _findImplicitLengthCm(normalized);
+    final lengthCm =
+        _findLengthCm(normalized) ?? _findImplicitLengthCm(normalized);
     final weightG = _findWeightG(normalized);
 
     return ParsedVoiceCatch(
@@ -175,14 +176,11 @@ class VoiceCatchParser {
     // 2) Einzelne Wort-Tokens — als Inline-Replacement, damit Whitespaces
     //    und Satzzeichen exakt erhalten bleiben (Dart's String.split mit
     //    Capture-Group behält die Separatoren NICHT, das hatten wir vorher).
-    t = t.replaceAllMapped(
-      RegExp(r'[a-zäöüß]+', caseSensitive: false),
-      (m) {
-        final word = m.group(0)!.toLowerCase();
-        final repl = _numberWords[word];
-        return repl ?? m.group(0)!;
-      },
-    );
+    t = t.replaceAllMapped(RegExp(r'[a-zäöüß]+', caseSensitive: false), (m) {
+      final word = m.group(0)!.toLowerCase();
+      final repl = _numberWords[word];
+      return repl ?? m.group(0)!;
+    });
 
     return t;
   }
@@ -294,8 +292,9 @@ class VoiceCatchParser {
       final tail = (m.group(2) ?? '').toLowerCase();
       // Wenn direkt eine Gewichts- oder explizite Längen-Einheit folgt,
       // überlassen wir das den expliziten Parsern.
-      if (RegExp(r'^\s*(?:kg|kilo|gramm|\bg\b|pfund|cm|centimeter|zentimeter|sentimeter|santimeter|m\b|meter)')
-          .hasMatch(tail)) {
+      if (RegExp(
+        r'^\s*(?:kg|kilo|gramm|\bg\b|pfund|cm|centimeter|zentimeter|sentimeter|santimeter|m\b|meter)',
+      ).hasMatch(tail)) {
         continue;
       }
       // Plausibler Längenbereich für Süßwasserfische in cm.

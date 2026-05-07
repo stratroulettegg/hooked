@@ -34,7 +34,9 @@ Uint8List _compressInIsolate(_CompressArgs args) {
   // EXIF-Orientation auflösen, sonst rotiert das Bild im Backend falsch.
   final oriented = img.bakeOrientation(decoded);
 
-  final longer = oriented.width >= oriented.height ? oriented.width : oriented.height;
+  final longer = oriented.width >= oriented.height
+      ? oriented.width
+      : oriented.height;
   final resized = longer > args.maxEdge
       ? img.copyResize(
           oriented,

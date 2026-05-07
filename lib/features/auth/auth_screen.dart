@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../core/constants/legal_urls.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/services/firebase/auth_service.dart';
 import '../../shared/services/firebase/firebase_bootstrap.dart';
 import '../../shared/widgets/apex_app_bar.dart';
+import '../../shared/widgets/app_toast.dart';
 
 /// Login-Screen mit Apple und Google.
 class AuthScreen extends ConsumerStatefulWidget {
@@ -70,7 +74,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Nur noetig, wenn du Trips mit anderen teilen willst. '
+                    'Nur nötig, wenn du Trips mit anderen teilen willst. '
                     'Alles andere funktioniert weiter offline.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, color: c.textSecondary),
@@ -116,10 +120,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   Text(
                     'Wir speichern nur deinen Anbieter-Profilnamen und (optional) '
                     'dein Profilbild in einem EU-Firebase-Projekt. '
-                    'Du kannst deinen Account jederzeit im Profil loeschen.',
+                    'Du kannst deinen Account jederzeit im Profil löschen.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 11, color: c.textMuted),
                   ),
+                  const SizedBox(height: 16),
+                  _LegalConsentText(color: c.textMuted),
                 ],
               ),
             ),
@@ -208,6 +214,56 @@ class _NotConfigured extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LegalConsentText extends StatelessWidget {
+  const _LegalConsentText({required this.color});
+  final Color color;
+
+  Future<void> _open(BuildContext context, String url) async {
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && context.mounted) {
+      AppToast.error(context, 'Link konnte nicht geöffnet werden.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = TextStyle(fontSize: 11, color: color, height: 1.4);
+    final link = TextStyle(
+      fontSize: 11,
+      color: ApexColors.primary,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+      height: 1.4,
+    );
+    return Text.rich(
+      TextSpan(
+        style: base,
+        children: [
+          const TextSpan(text: 'Mit der Anmeldung akzeptierst du unsere '),
+          TextSpan(
+            text: 'Datenschutzerklärung',
+            style: link,
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => _open(context, LegalUrls.privacy),
+          ),
+          const TextSpan(text: ' und das '),
+          TextSpan(
+            text: 'Impressum',
+            style: link,
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => _open(context, LegalUrls.imprint),
+          ),
+          const TextSpan(text: '.'),
+        ],
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }

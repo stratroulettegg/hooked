@@ -79,6 +79,10 @@ class RecordsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
 
+              // Angelbilanz-Banner
+              _RevierBanner(),
+              const SizedBox(height: 24),
+
               Text(
                 'PRO ART',
                 style: TextStyle(
@@ -518,6 +522,59 @@ class _EmptyState extends StatelessWidget {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+class _RevierBanner extends StatelessWidget {
+  const _RevierBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return GestureDetector(
+      onTap: () => context.push('/revier'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              ApexColors.primary.withAlpha(30),
+              ApexColors.primary.withAlpha(10),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: ApexColors.primary.withAlpha(60), width: 1),
+        ),
+        child: Row(
+          children: [
+            const Text('📊', style: TextStyle(fontSize: 28)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dein Revier',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    'Monatliche & jährliche Angelbilanz',
+                    style: TextStyle(color: c.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: c.textMuted, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 String _formatWeight(int g) => AppNum.kg(g);
 

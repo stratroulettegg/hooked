@@ -1,6 +1,9 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../shared/widgets/app_toast.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format/app_formats.dart';
@@ -11,6 +14,8 @@ import '../../shared/services/app_providers.dart';
 import '../../shared/services/feed_seen_service.dart';
 import '../../shared/services/firebase/feed_service.dart';
 import '../../shared/services/firebase/auth_providers.dart';
+import '../../shared/services/firebase/user_profile_providers.dart';
+import '../../shared/services/firebase/user_profile_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/h_scroll_with_hint.dart';
 import '../../shared/widgets/moderation_actions.dart';
@@ -30,13 +35,8 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
   bool _onlyPB = false;
   _CatchSort _sort = _CatchSort.dateDesc;
   bool _twoColumns = false;
-  int _tab = 0; // 0 = Meine, 1 = Community
-  /// Wenn gesetzt, springt der Community-Feed beim Öffnen direkt auf
-  /// diesen Post. Wird nach einem Sprung auf null gesetzt, damit ein
-  /// erneuter Tab-Wechsel oben startet.
-  String? _focusPostId;
 
-  /// Persönliche Rekord-IDs (pro Art jeweils der schwerste, ersatzweise längste).
+  /// Persönliche Rekord-IDs (pro Art jeweils der längste, ersatzweise schwerste).
   Set<String> _personalBestIds(List<CatchEntry> all) {
     final bestPerSpecies = <FishSpecies, CatchEntry>{};
     for (final e in all) {
@@ -45,22 +45,17 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
         bestPerSpecies[e.species] = e;
         continue;
       }
-      final curScore = (cur.weightG ?? 0) * 1000 + (cur.lengthCm ?? 0);
-      final newScore = (e.weightG ?? 0) * 1000 + (e.lengthCm ?? 0);
+      // PB primär nach Länge (cm), Gewicht (g) nur als Tiebreaker.
+      final curScore = (cur.lengthCm ?? 0) * 10000 + (cur.weightG ?? 0);
+      final newScore = (e.lengthCm ?? 0) * 10000 + (e.weightG ?? 0);
       if (newScore > curScore) bestPerSpecies[e.species] = e;
     }
     return bestPerSpecies.values.map((e) => e.id).toSet();
   }
 
-  /// Wechselt auf den Community-Tab und scrollt direkt zu `postId`.
+  /// Springt in den globalen Feed-Tab und scrollt direkt zu `postId`.
   void _jumpToFeed(String postId) {
-    setState(() {
-      _focusPostId = postId;
-      _tab = 1;
-    });
-    // Direkt nach dem Tab-Wechsel den Feed neu abonnieren – verhindert
-    // permission-denied direkt nach Login.
-    ref.invalidate(feedPostsProvider);
+    context.push('/feed', extra: postId);
   }
 
   /// Trend-Berechnung: Anzahl Fänge im aktuellen Monat vs. Vormonat.
@@ -86,238 +81,215 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
     final statsAsync = ref.watch(catchStatsProvider);
 
     return Scaffold(
-      appBar: _tab == 1
-          ? ApexAppBar(
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Zurück zu „Meine"',
-                onPressed: () => setState(() {
-                  _tab = 0;
-                  _focusPostId = null;
-                }),
-              ),
-            )
-          : const ApexAppBar(),
-      body: _tab == 1
-          ? _CommunityFeedView(initialPostId: _focusPostId)
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: _FeedTabSwitch(
-                    value: _tab,
-                    onChanged: (i) {
-                      setState(() {
-                        _tab = i;
-                        if (i == 1 && _focusPostId == null) {
-                          // regulärer Switch ohne Sprung-Wunsch
-                        } else if (i == 0) {
-                          _focusPostId = null;
-                        }
-                      });
-                      // Beim Wechsel auf Community immer neu laden,
-                      // damit der Stream sicher neu auf die Auth-Lage greift.
-                      if (i == 1) {
-                        ref.invalidate(feedPostsProvider);
-                      }
-                    },
-                  ),
-                ),
-                Expanded(
-                  child: catchesAsync.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(
-                        color: ApexColors.primary,
-                        strokeWidth: 2,
+      appBar: const ApexAppBar(),
+      body: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: _ForecastPill(),
+          ),
+          Expanded(
+            child: catchesAsync.when(
+              loading: () => const _CatchSkeletonLoader(),
+              error: (e, _) => Center(child: Text('Fehler: $e')),
+              data: (catches) {
+                if (catches.isEmpty) {
+                  return _EmptyState(onAdd: () => context.push('/catches/add'));
+                }
+
+                // Verfügbare Köder.
+                final availableLures =
+                    catches
+                        .map((e) => e.lure)
+                        .whereType<String>()
+                        .where((l) => l.trim().isNotEmpty)
+                        .toSet()
+                        .toList()
+                      ..sort(
+                        (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+                      );
+
+                // Verfügbare Arten.
+                final availableSpecies =
+                    catches.map((e) => e.species).toSet().toList()
+                      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+
+                final pbIds = _personalBestIds(catches);
+                final trend = _monthTrend(catches);
+
+                var filtered = catches;
+                if (_speciesFilter != null) {
+                  filtered = filtered
+                      .where((e) => e.species == _speciesFilter)
+                      .toList();
+                }
+                if (_lureFilter != null) {
+                  filtered = filtered
+                      .where((e) => e.lure == _lureFilter)
+                      .toList();
+                }
+                if (_onlyPB) {
+                  filtered = filtered
+                      .where((e) => pbIds.contains(e.id))
+                      .toList();
+                }
+
+                // Sortierung.
+                switch (_sort) {
+                  case _CatchSort.dateDesc:
+                    filtered.sort((a, b) => b.caughtAt.compareTo(a.caughtAt));
+                    break;
+                  case _CatchSort.lengthDesc:
+                    filtered.sort(
+                      (a, b) => (b.lengthCm ?? -1).compareTo(a.lengthCm ?? -1),
+                    );
+                    break;
+                  case _CatchSort.weightDesc:
+                    filtered.sort(
+                      (a, b) => (b.weightG ?? -1).compareTo(a.weightG ?? -1),
+                    );
+                    break;
+                }
+
+                final hasFilter =
+                    _speciesFilter != null || _lureFilter != null || _onlyPB;
+
+                // ID-Liste in aktueller Filter-/Sort-Reihenfolge — wird an die
+                // Detail-Ansicht durchgereicht, damit die vertikale Swipe-Navigation
+                // die gleiche Reihenfolge nutzt.
+                final siblingIds = [for (final e in filtered) e.id];
+
+                // Gruppierung (nur bei Datums-Sort sinnvoll).
+                final grouped = _sort == _CatchSort.dateDesc
+                    ? _groupByMonth(filtered)
+                    : null;
+
+                return CustomScrollView(
+                  slivers: [
+                    statsAsync.when(
+                      data: (stats) => SliverToBoxAdapter(
+                        child: _StatsHero(stats: stats, trend: trend),
+                      ),
+                      loading: () =>
+                          const SliverToBoxAdapter(child: SizedBox()),
+                      error: (_, __) =>
+                          const SliverToBoxAdapter(child: SizedBox()),
+                    ),
+                    SliverToBoxAdapter(
+                      child: _FilterBar(
+                        species: _speciesFilter,
+                        lure: _lureFilter,
+                        onlyPB: _onlyPB,
+                        sort: _sort,
+                        twoColumns: _twoColumns,
+                        availableSpecies: availableSpecies,
+                        availableLures: availableLures,
+                        onChanged: (s, l, pb, sort) => setState(() {
+                          _speciesFilter = s;
+                          _lureFilter = l;
+                          _onlyPB = pb;
+                          _sort = sort;
+                        }),
+                        onToggleColumns: () =>
+                            setState(() => _twoColumns = !_twoColumns),
                       ),
                     ),
-                    error: (e, _) => Center(child: Text('Fehler: $e')),
-                    data: (catches) {
-                      if (catches.isEmpty) {
-                        return _EmptyState(
-                          onAdd: () => context.push('/catches/add'),
-                        );
-                      }
-
-          // Verfügbare Köder.
-          final availableLures =
-              catches
-                  .map((e) => e.lure)
-                  .whereType<String>()
-                  .where((l) => l.trim().isNotEmpty)
-                  .toSet()
-                  .toList()
-                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
-          // Verfügbare Arten.
-          final availableSpecies =
-              catches.map((e) => e.species).toSet().toList()
-                ..sort((a, b) => a.displayName.compareTo(b.displayName));
-
-          final pbIds = _personalBestIds(catches);
-          final trend = _monthTrend(catches);
-
-          var filtered = catches;
-          if (_speciesFilter != null) {
-            filtered = filtered
-                .where((e) => e.species == _speciesFilter)
-                .toList();
-          }
-          if (_lureFilter != null) {
-            filtered = filtered.where((e) => e.lure == _lureFilter).toList();
-          }
-          if (_onlyPB) {
-            filtered = filtered.where((e) => pbIds.contains(e.id)).toList();
-          }
-
-          // Sortierung.
-          switch (_sort) {
-            case _CatchSort.dateDesc:
-              filtered.sort((a, b) => b.caughtAt.compareTo(a.caughtAt));
-              break;
-            case _CatchSort.lengthDesc:
-              filtered.sort(
-                (a, b) => (b.lengthCm ?? -1).compareTo(a.lengthCm ?? -1),
-              );
-              break;
-            case _CatchSort.weightDesc:
-              filtered.sort(
-                (a, b) => (b.weightG ?? -1).compareTo(a.weightG ?? -1),
-              );
-              break;
-          }
-
-          final hasFilter =
-              _speciesFilter != null || _lureFilter != null || _onlyPB;
-
-          // ID-Liste in aktueller Filter-/Sort-Reihenfolge — wird an die
-          // Detail-Ansicht durchgereicht, damit die vertikale Swipe-Navigation
-          // die gleiche Reihenfolge nutzt.
-          final siblingIds = [for (final e in filtered) e.id];
-
-          // Gruppierung (nur bei Datums-Sort sinnvoll).
-          final grouped = _sort == _CatchSort.dateDesc
-              ? _groupByMonth(filtered)
-              : null;
-
-          return CustomScrollView(
-            slivers: [
-              statsAsync.when(
-                data: (stats) => SliverToBoxAdapter(
-                  child: _StatsHero(stats: stats, trend: trend),
-                ),
-                loading: () => const SliverToBoxAdapter(child: SizedBox()),
-                error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
-              ),
-              SliverToBoxAdapter(
-                child: _FilterBar(
-                  species: _speciesFilter,
-                  lure: _lureFilter,
-                  onlyPB: _onlyPB,
-                  sort: _sort,
-                  twoColumns: _twoColumns,
-                  availableSpecies: availableSpecies,
-                  availableLures: availableLures,
-                  onChanged: (s, l, pb, sort) => setState(() {
-                    _speciesFilter = s;
-                    _lureFilter = l;
-                    _onlyPB = pb;
-                    _sort = sort;
-                  }),
-                  onToggleColumns: () =>
-                      setState(() => _twoColumns = !_twoColumns),
-                ),
-              ),
-              if (filtered.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _NoFilterResults(
-                    onReset: () => setState(() {
-                      _speciesFilter = null;
-                      _lureFilter = null;
-                      _onlyPB = false;
-                      _sort = _CatchSort.dateDesc;
-                    }),
-                  ),
-                )
-              else if (grouped != null)
-                ..._buildGroupedSlivers(context, grouped, pbIds, siblingIds)
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                  sliver: _twoColumns
-                      ? SliverGrid.builder(
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 0.72,
-                          ),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, i) => _CatchCard(
-                            entry: filtered[i],
-                            isPB: pbIds.contains(filtered[i].id),
-                            compact: true,
-                            onJumpToFeed: _jumpToFeed,
-                            onTap: () => context.push(
-                              '/catches/detail',
-                              extra: CatchDetailArgs(
-                                entry: filtered[i],
-                                siblingIds: siblingIds,
-                              ),
-                            ),
-                          ),
-                        )
-                      : SliverList.builder(
-                          itemCount: filtered.length,
-                          itemBuilder: (context, i) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: SwipeToDelete(
-                              dismissKey:
-                                  ValueKey('catch-${filtered[i].id}'),
-                              confirmTitle: 'Fang löschen?',
-                              confirmMessage:
-                                  'Dieser Fang wird unwiderruflich gelöscht.',
-                              onDelete: () => ref
-                                  .read(catchProvider.notifier)
-                                  .removeCatch(filtered[i].id),
-                              child: _CatchCard(
-                                entry: filtered[i],
-                                isPB: pbIds.contains(filtered[i].id),
-                                onJumpToFeed: _jumpToFeed,
-                                onTap: () => context.push(
-                                  '/catches/detail',
-                                  extra: CatchDetailArgs(
-                                    entry: filtered[i],
-                                    siblingIds: siblingIds,
+                    if (filtered.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _NoFilterResults(
+                          onReset: () => setState(() {
+                            _speciesFilter = null;
+                            _lureFilter = null;
+                            _onlyPB = false;
+                            _sort = _CatchSort.dateDesc;
+                          }),
+                        ),
+                      )
+                    else if (grouped != null)
+                      ..._buildGroupedSlivers(
+                        context,
+                        grouped,
+                        pbIds,
+                        siblingIds,
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                        sliver: _twoColumns
+                            ? SliverGrid.builder(
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      crossAxisSpacing: 10,
+                                      mainAxisSpacing: 10,
+                                      childAspectRatio: 0.72,
+                                    ),
+                                itemCount: filtered.length,
+                                itemBuilder: (context, i) => _CatchCard(
+                                  entry: filtered[i],
+                                  isPB: pbIds.contains(filtered[i].id),
+                                  compact: true,
+                                  onJumpToFeed: _jumpToFeed,
+                                  onTap: () => context.push(
+                                    '/catches/detail',
+                                    extra: CatchDetailArgs(
+                                      entry: filtered[i],
+                                      siblingIds: siblingIds,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : SliverList.builder(
+                                itemCount: filtered.length,
+                                itemBuilder: (context, i) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: SwipeToDelete(
+                                    dismissKey: ValueKey(
+                                      'catch-${filtered[i].id}',
+                                    ),
+                                    confirmTitle: 'Fang löschen?',
+                                    confirmMessage:
+                                        'Dieser Fang wird unwiderruflich gelöscht.',
+                                    onDelete: () => ref
+                                        .read(catchProvider.notifier)
+                                        .removeCatch(filtered[i].id),
+                                    child: _CatchCard(
+                                      entry: filtered[i],
+                                      isPB: pbIds.contains(filtered[i].id),
+                                      onJumpToFeed: _jumpToFeed,
+                                      onTap: () => context.push(
+                                        '/catches/detail',
+                                        extra: CatchDetailArgs(
+                                          entry: filtered[i],
+                                          siblingIds: siblingIds,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
+                      ),
+                    if (hasFilter && filtered.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          child: Center(
+                            child: Text(
+                              '${filtered.length} von ${catches.length} Fängen',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: ApexColors.of(context).textMuted,
+                                letterSpacing: 0.6,
+                              ),
                             ),
                           ),
                         ),
-                ),
-              if (hasFilter && filtered.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    child: Center(
-                      child: Text(
-                        '${filtered.length} von ${catches.length} Fängen',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: ApexColors.of(context).textMuted,
-                          letterSpacing: 0.6,
-                        ),
                       ),
-                    ),
-                  ),
-                ),
-            ],
-          );
-                    },
-                  ),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -349,8 +321,7 @@ class _CatchListScreenState extends ConsumerState<CatchListScreen> {
           ),
           sliver: _twoColumns
               ? SliverGrid.builder(
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
@@ -416,8 +387,7 @@ class _MonthGroup {
   final List<CatchEntry> entries;
 
   int get count => entries.length;
-  int get totalWeightG =>
-      entries.fold(0, (sum, e) => sum + (e.weightG ?? 0));
+  int get totalWeightG => entries.fold(0, (sum, e) => sum + (e.weightG ?? 0));
 }
 
 List<_MonthGroup> _groupByMonth(List<CatchEntry> sortedDesc) {
@@ -425,9 +395,7 @@ List<_MonthGroup> _groupByMonth(List<CatchEntry> sortedDesc) {
   for (final e in sortedDesc) {
     final y = e.caughtAt.year;
     final m = e.caughtAt.month;
-    if (groups.isNotEmpty &&
-        groups.last.year == y &&
-        groups.last.month == m) {
+    if (groups.isNotEmpty && groups.last.year == y && groups.last.month == m) {
       groups.last.entries.add(e);
     } else {
       groups.add(_MonthGroup(year: y, month: m, entries: [e]));
@@ -463,15 +431,19 @@ class _MonthHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => _height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     final c = ApexColors.of(context);
     final monthLabel = _monthNamesDe[group.month - 1];
     final weight = group.totalWeightG;
     final weightLabel = weight >= 1000
         ? '${AppNum.fixed(weight / 1000, 1)} kg'
         : weight > 0
-            ? '$weight g'
-            : null;
+        ? '$weight g'
+        : null;
     return Container(
       height: _height,
       color: c.background,
@@ -490,9 +462,7 @@ class _MonthHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: Container(height: 1, color: c.border),
-          ),
+          Expanded(child: Container(height: 1, color: c.border)),
           const SizedBox(width: 10),
           Text(
             weightLabel != null
@@ -533,12 +503,12 @@ class _StatsHero extends StatelessWidget {
     final pbValue = pb == null
         ? null
         : pb.weightG != null
-            ? (pb.weightG! >= 1000
-                ? '${AppNum.fixed(pb.weightG! / 1000, 1)} kg'
-                : '${pb.weightG} g')
-            : pb.lengthCm != null
-                ? AppNum.cm(pb.lengthCm!)
-                : null;
+        ? (pb.weightG! >= 1000
+              ? '${AppNum.fixed(pb.weightG! / 1000, 1)} kg'
+              : '${pb.weightG} g')
+        : pb.lengthCm != null
+        ? AppNum.cm(pb.lengthCm!)
+        : null;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -789,105 +759,112 @@ class _FilterBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-          _FilterChipDropdown<FishSpecies?>(
-            icon: Icons.set_meal,
-            label: species?.displayName ?? 'Fischart',
-            active: species != null,
-            onTap: () async {
-              final picked = await showModalBottomSheet<FishSpecies?>(
-                context: context,
-                showDragHandle: true,
-                backgroundColor: c.surface,
-                builder: (ctx) => _PickerSheet<FishSpecies>(
-                  title: 'Fischart',
-                  items: availableSpecies,
-                  selected: species,
-                  labelOf: (s) => '${s.emoji}  ${s.displayName}',
-                ),
-              );
-              if (picked == null && species != null) return;
-              onChanged(picked, lure, onlyPB, sort);
-            },
-            onClear: species != null
-                ? () => onChanged(null, lure, onlyPB, sort)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          _FilterChipDropdown(
-            icon: Icons.phishing,
-            label: lure ?? 'Köder',
-            active: lure != null,
-            onTap: () async {
-              if (availableLures.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Noch keine Köder erfasst')),
-                );
-                return;
-              }
-              final picked = await showModalBottomSheet<String?>(
-                context: context,
-                showDragHandle: true,
-                backgroundColor: c.surface,
-                builder: (ctx) => _PickerSheet<String>(
-                  title: 'Köder',
-                  items: availableLures,
-                  selected: lure,
-                  labelOf: (s) => s,
-                ),
-              );
-              if (picked == null && lure != null) return;
-              onChanged(species, picked, onlyPB, sort);
-            },
-            onClear: lure != null
-                ? () => onChanged(species, null, onlyPB, sort)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          _FilterChipDropdown(
-            icon: Icons.emoji_events,
-            label: 'PB',
-            active: onlyPB,
-            isToggle: true,
-            onTap: () => onChanged(species, lure, !onlyPB, sort),
-          ),
-          const SizedBox(width: 8),
-          _FilterChipDropdown(
-            icon: Icons.sort,
-            label: sort.shortLabel,
-            active: sort != _CatchSort.dateDesc,
-            onTap: () async {
-              final picked = await showModalBottomSheet<_CatchSort>(
-                context: context,
-                showDragHandle: true,
-                backgroundColor: c.surface,
-                builder: (ctx) => _PickerSheet<_CatchSort>(
-                  title: 'Sortieren nach',
-                  items: _CatchSort.values,
-                  selected: sort,
-                  labelOf: (s) => s.label,
-                ),
-              );
-              if (picked == null) return;
-              onChanged(species, lure, onlyPB, picked);
-            },
-            onClear: sort != _CatchSort.dateDesc
-                ? () => onChanged(species, lure, onlyPB, _CatchSort.dateDesc)
-                : null,
-          ),
-          if (hasAny) ...[
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: () =>
-                  onChanged(null, null, false, _CatchSort.dateDesc),
-              icon: const Icon(Icons.close, size: 16),
-              label: const Text('Zurücksetzen'),
-              style: TextButton.styleFrom(
-                foregroundColor: c.textSecondary,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
+                  _FilterChipDropdown<FishSpecies?>(
+                    icon: Icons.set_meal,
+                    label: species?.displayName ?? 'Fischart',
+                    active: species != null,
+                    onTap: () async {
+                      final picked = await showModalBottomSheet<FishSpecies?>(
+                        context: context,
+                        showDragHandle: true,
+                        backgroundColor: c.surface,
+                        builder: (ctx) => _PickerSheet<FishSpecies>(
+                          title: 'Fischart',
+                          items: availableSpecies,
+                          selected: species,
+                          labelOf: (s) => '${s.emoji}  ${s.displayName}',
+                        ),
+                      );
+                      if (picked == null && species != null) return;
+                      onChanged(picked, lure, onlyPB, sort);
+                    },
+                    onClear: species != null
+                        ? () => onChanged(null, lure, onlyPB, sort)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChipDropdown(
+                    icon: Icons.phishing,
+                    label: lure ?? 'Köder',
+                    active: lure != null,
+                    onTap: () async {
+                      if (availableLures.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Noch keine Köder erfasst'),
+                          ),
+                        );
+                        return;
+                      }
+                      final picked = await showModalBottomSheet<String?>(
+                        context: context,
+                        showDragHandle: true,
+                        backgroundColor: c.surface,
+                        builder: (ctx) => _PickerSheet<String>(
+                          title: 'Köder',
+                          items: availableLures,
+                          selected: lure,
+                          labelOf: (s) => s,
+                        ),
+                      );
+                      if (picked == null && lure != null) return;
+                      onChanged(species, picked, onlyPB, sort);
+                    },
+                    onClear: lure != null
+                        ? () => onChanged(species, null, onlyPB, sort)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChipDropdown(
+                    icon: Icons.emoji_events,
+                    label: 'PB',
+                    active: onlyPB,
+                    isToggle: true,
+                    onTap: () => onChanged(species, lure, !onlyPB, sort),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChipDropdown(
+                    icon: Icons.sort,
+                    label: sort.shortLabel,
+                    active: sort != _CatchSort.dateDesc,
+                    onTap: () async {
+                      final picked = await showModalBottomSheet<_CatchSort>(
+                        context: context,
+                        showDragHandle: true,
+                        backgroundColor: c.surface,
+                        builder: (ctx) => _PickerSheet<_CatchSort>(
+                          title: 'Sortieren nach',
+                          items: _CatchSort.values,
+                          selected: sort,
+                          labelOf: (s) => s.label,
+                        ),
+                      );
+                      if (picked == null) return;
+                      onChanged(species, lure, onlyPB, picked);
+                    },
+                    onClear: sort != _CatchSort.dateDesc
+                        ? () => onChanged(
+                            species,
+                            lure,
+                            onlyPB,
+                            _CatchSort.dateDesc,
+                          )
+                        : null,
+                  ),
+                  if (hasAny) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () =>
+                          onChanged(null, null, false, _CatchSort.dateDesc),
+                      icon: const Icon(Icons.close, size: 16),
+                      label: const Text('Zurücksetzen'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.textSecondary,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1129,11 +1106,10 @@ class _CatchCard extends ConsumerWidget {
     final hasPhoto = AppPaths.photoFile(entry.photoPath) != null;
 
     // Live-Counter aus dem eigenen Feed-Stream + Seen-State.
-    final myPosts =
-        ref.watch(myFeedPostsProvider).valueOrNull ?? const {};
+    final myPosts = ref.watch(myFeedPostsProvider).valueOrNull ?? const {};
     final FeedPost? post = entry.isShared ? myPosts[entry.id] : null;
-    final seen = ref.watch(feedSeenProvider)[entry.id] ??
-        const FeedSeenCounts();
+    final seen =
+        ref.watch(feedSeenProvider)[entry.id] ?? const FeedSeenCounts();
     final newLikes = post == null
         ? 0
         : (post.likeCount - seen.likes).clamp(0, 9999);
@@ -1197,9 +1173,10 @@ class _CatchCard extends ConsumerWidget {
                       builder: (ctx, constraints) {
                         final file = AppPaths.photoFile(entry.photoPath);
                         if (file != null) {
-                          final cacheW = (constraints.maxWidth *
-                                  MediaQuery.devicePixelRatioOf(ctx))
-                              .round();
+                          final cacheW =
+                              (constraints.maxWidth *
+                                      MediaQuery.devicePixelRatioOf(ctx))
+                                  .round();
                           return Image.file(
                             file,
                             fit: BoxFit.cover,
@@ -1242,8 +1219,11 @@ class _CatchCard extends ConsumerWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.emoji_events,
-                                  size: 13, color: Colors.white),
+                              Icon(
+                                Icons.emoji_events,
+                                size: 13,
+                                color: Colors.white,
+                              ),
                               SizedBox(width: 4),
                               Text(
                                 'PB',
@@ -1304,8 +1284,11 @@ class _CatchCard extends ConsumerWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.image_not_supported_outlined,
-                                  size: 12, color: Colors.white),
+                              Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 12,
+                                color: Colors.white,
+                              ),
                               SizedBox(width: 4),
                               Text(
                                 'Kein Foto',
@@ -1326,7 +1309,11 @@ class _CatchCard extends ConsumerWidget {
               // ── Header-Zeile: Art + Datum/Uhrzeit ────────────────────────
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                    compact ? 10 : 14, compact ? 9 : 12, compact ? 10 : 14, 0),
+                  compact ? 10 : 14,
+                  compact ? 9 : 12,
+                  compact ? 10 : 14,
+                  0,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1350,8 +1337,9 @@ class _CatchCard extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            AppDateFormats.dayMonthYearShort
-                                .format(entry.caughtAt),
+                            AppDateFormats.dayMonthYearShort.format(
+                              entry.caughtAt,
+                            ),
                             style: TextStyle(
                               fontSize: 11,
                               color: c.textMuted,
@@ -1368,8 +1356,9 @@ class _CatchCard extends ConsumerWidget {
                               ),
                               const SizedBox(width: 3),
                               Text(
-                                AppDateFormats.hourMinute
-                                    .format(entry.caughtAt),
+                                AppDateFormats.hourMinute.format(
+                                  entry.caughtAt,
+                                ),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: c.textSecondary,
@@ -1388,7 +1377,11 @@ class _CatchCard extends ConsumerWidget {
               if (entry.weightG != null || entry.lengthCm != null)
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                      compact ? 10 : 14, 8, compact ? 10 : 14, 0),
+                    compact ? 10 : 14,
+                    8,
+                    compact ? 10 : 14,
+                    0,
+                  ),
                   child: Wrap(
                     spacing: 6,
                     runSpacing: 4,
@@ -1415,7 +1408,11 @@ class _CatchCard extends ConsumerWidget {
               // ── Footer: Köder + Spot (immer da, sonst Mini-Hint) ────────
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                    compact ? 10 : 14, 8, compact ? 10 : 14, compact ? 10 : 12),
+                  compact ? 10 : 14,
+                  8,
+                  compact ? 10 : 14,
+                  compact ? 10 : 12,
+                ),
                 child: Wrap(
                   spacing: compact ? 8 : 12,
                   runSpacing: 4,
@@ -1427,8 +1424,8 @@ class _CatchCard extends ConsumerWidget {
                         text: compact
                             ? entry.lure!
                             : entry.retrieveStyles.isNotEmpty
-                                ? '${entry.lure!} · ${entry.retrieveStyles.first.displayName}'
-                                : entry.lure!,
+                            ? '${entry.lure!} · ${entry.retrieveStyles.first.displayName}'
+                            : entry.lure!,
                         iconColor: c.textMuted,
                       ),
                     if (spot != null && !compact)
@@ -1440,8 +1437,9 @@ class _CatchCard extends ConsumerWidget {
                     if (compact)
                       _FooterChip(
                         icon: _timeOfDayIcon(entry.caughtAt),
-                        text: AppDateFormats.dayMonthYearShort
-                            .format(entry.caughtAt),
+                        text: AppDateFormats.dayMonthYearShort.format(
+                          entry.caughtAt,
+                        ),
                         iconColor: c.textSecondary,
                       ),
                     if (entry.lure == null && spot == null && !compact)
@@ -1476,9 +1474,7 @@ Widget _emojiBackground(String emoji) {
         end: Alignment.bottomRight,
       ),
     ),
-    child: Center(
-      child: Text(emoji, style: const TextStyle(fontSize: 64)),
-    ),
+    child: Center(child: Text(emoji, style: const TextStyle(fontSize: 64))),
   );
 }
 
@@ -1563,116 +1559,156 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.phishing,
-            size: 64,
-            color: ApexColors.of(context).textMuted,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Noch keine Fänge',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: ApexColors.of(context).textSecondary,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.phishing, size: 64, color: c.textMuted),
+            const SizedBox(height: 16),
+            Text(
+              'Noch keine Fänge',
+              style: TextStyle(
+                fontFamily: 'Rajdhani',
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Tippe auf + um deinen ersten Fang einzutragen',
-            style: TextStyle(color: ApexColors.of(context).textMuted),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: const Text('Fang eintragen'),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'Trage deinen ersten Fang ein: Art, Köder, Foto — wir bauen dir daraus deine persönliche Statistik.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: c.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+              label: const Text('Fang eintragen'),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Segmented-Switch zwischen "Meine Fänge" und "Community-Feed".
-class _FeedTabSwitch extends StatelessWidget {
-  const _FeedTabSwitch({required this.value, required this.onChanged});
-
-  final int value;
-  final ValueChanged<int> onChanged;
+/// Kompakte Beißzeit-Pill, die im Logbuch oben den Predator-Index anzeigt.
+/// Tap öffnet den vollen Forecast-Screen.
+class _ForecastPill extends ConsumerWidget {
+  const _ForecastPill();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = ApexColors.of(context);
-    Widget tab(int i, String label, IconData icon) {
-      final active = i == value;
-      return Expanded(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => onChanged(i),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: active ? ApexColors.primary : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: active ? Colors.white : c.textMuted,
+    final scoreAsync = ref.watch(predatorScoreProvider);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => context.push('/forecast'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: c.surface,
+            border: Border.all(color: c.border),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: ApexColors.primary.withAlpha(28),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: active ? Colors.white : c.textPrimary,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                    fontSize: 13,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.bolt,
+                  color: ApexColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: scoreAsync.when(
+                  loading: () => Text(
+                    'Beißzeit-Index lädt …',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  error: (_, __) => Text(
+                    'Beißzeit-Index nicht verfügbar',
+                    style: TextStyle(color: c.textMuted, fontSize: 13),
+                  ),
+                  data: (s) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Beißzeit ${s.score}/100',
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '· ${s.label}',
+                            style: const TextStyle(
+                              color: ApexColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        s.speciesProfile.name,
+                        style: TextStyle(
+                          color: c.textMuted,
+                          fontSize: 11,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              Icon(Icons.chevron_right, color: c.textMuted, size: 22),
+            ],
           ),
         ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          tab(0, 'Meine', Icons.person_outline),
-          tab(1, 'Community', Icons.public),
-        ],
       ),
     );
   }
 }
 
 /// Zeigt den globalen Community-Feed.
-class _CommunityFeedView extends ConsumerStatefulWidget {
-  const _CommunityFeedView({this.initialPostId});
+class CommunityFeedView extends ConsumerStatefulWidget {
+  const CommunityFeedView({super.key, this.initialPostId});
 
   /// Wenn gesetzt, springt der Pager beim ersten Render zu diesem Post.
   final String? initialPostId;
 
   @override
-  ConsumerState<_CommunityFeedView> createState() =>
-      _CommunityFeedViewState();
+  ConsumerState<CommunityFeedView> createState() => CommunityFeedViewState();
 }
 
-class _CommunityFeedViewState extends ConsumerState<_CommunityFeedView> {
+class CommunityFeedViewState extends ConsumerState<CommunityFeedView> {
   PageController? _pager;
   bool _didJump = false;
 
@@ -1734,7 +1770,8 @@ class _CommunityFeedViewState extends ConsumerState<_CommunityFeedView> {
         // bevor der Stream auf den neuen Auth-State umgeschwenkt ist.
         // Statt einer rohen Exception zeigen wir einen freundlichen Hinweis.
         final msg = e.toString().toLowerCase();
-        final isPermission = msg.contains('permission-denied') ||
+        final isPermission =
+            msg.contains('permission-denied') ||
             msg.contains('permission_denied');
         return Center(
           child: Padding(
@@ -1816,9 +1853,7 @@ class _CommunityFeedViewState extends ConsumerState<_CommunityFeedView> {
             : posts.indexWhere((p) => p.id == widget.initialPostId);
         final startIdx = initialIdx < 0 ? 0 : initialIdx;
         _pager ??= PageController(initialPage: startIdx);
-        if (!_didJump &&
-            widget.initialPostId != null &&
-            initialIdx >= 0) {
+        if (!_didJump && widget.initialPostId != null && initialIdx >= 0) {
           _didJump = true;
           // Falls Posts erst später eintreffen (Stream): nach dem Build
           // noch sanft hinscrollen.
@@ -1838,7 +1873,7 @@ class _CommunityFeedViewState extends ConsumerState<_CommunityFeedView> {
           controller: _pager,
           scrollDirection: Axis.vertical,
           itemCount: posts.length,
-          itemBuilder: (_, i) => _FeedPostPage(post: posts[i]),
+          itemBuilder: (_, i) => FeedPostPage(post: posts[i]),
         );
       },
     );
@@ -1847,10 +1882,48 @@ class _CommunityFeedViewState extends ConsumerState<_CommunityFeedView> {
 
 /// Eine Feed-Seite im Stil der eigenen Detailansicht: Foto als Hero,
 /// halbtransparentes Blur-Sheet mit den Details darüber.
-class _FeedPostPage extends ConsumerWidget {
-  const _FeedPostPage({required this.post});
+/// Vollbild-Ansicht eines Community-Feed-Beitrags. Wird sowohl im
+/// Community-Tab (PageView) als auch vom Profil-Grid (Push-Route) genutzt,
+/// damit Tap auf einen Post-Thumbnail die identische Darstellung liefert.
+class FeedPostPage extends ConsumerStatefulWidget {
+  const FeedPostPage({super.key, required this.post});
 
   final FeedPost post;
+
+  @override
+  ConsumerState<FeedPostPage> createState() => _FeedPostPageState();
+}
+
+class _FeedPostPageState extends ConsumerState<FeedPostPage> {
+  // Optimistischer Like-Override: solange der Server-Write noch
+  // unterwegs ist (oder das Stream-Update noch nicht da), zeigen wir
+  // den lokal getoggleten Zustand an. null = kein Override aktiv.
+  bool? _likedOverride;
+  int _countDelta = 0;
+
+  FeedPost get post => widget.post;
+
+  @override
+  void didUpdateWidget(covariant FeedPostPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Wenn der Server-Stream den optimistischen Zustand eingeholt hat,
+    // Override aufloesen, damit weitere Toggles korrekt rechnen.
+    final me = ref.read(currentUserProvider);
+    if (me == null) return;
+    if (_likedOverride != null) {
+      final serverLiked = widget.post.likedBy.contains(me.uid);
+      if (serverLiked == _likedOverride) {
+        _likedOverride = null;
+      }
+    }
+    final oldCount = oldWidget.post.likeCount;
+    final newCount = widget.post.likeCount;
+    if (newCount != oldCount && _countDelta != 0) {
+      // Server-Count ist gewandert — Delta entsprechend reduzieren.
+      _countDelta -= (newCount - oldCount);
+      if (_countDelta.abs() < 1) _countDelta = 0;
+    }
+  }
 
   String _relativeTime(DateTime when) {
     final diff = DateTime.now().difference(when);
@@ -1868,8 +1941,31 @@ class _FeedPostPage extends ConsumerWidget {
     return null;
   }
 
+  void _onLikeTap() {
+    final me = ref.read(currentUserProvider);
+    if (me == null) return;
+    final serverLiked = post.likedBy.contains(me.uid);
+    final currentLiked = _likedOverride ?? serverLiked;
+    final nextLiked = !currentLiked;
+    HapticFeedback.lightImpact();
+    setState(() {
+      _likedOverride = nextLiked;
+      _countDelta += nextLiked ? 1 : -1;
+    });
+    // Fire-and-forget: User wartet nicht.
+    ref.read(feedServiceProvider).toggleLike(post.id).catchError((e) {
+      if (!mounted) return;
+      // Rollback bei Fehler.
+      setState(() {
+        _likedOverride = currentLiked;
+        _countDelta += nextLiked ? -1 : 1;
+      });
+      AppToast.error(context, 'Like fehlgeschlagen: $e');
+    });
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final c = ApexColors.of(context);
     final species = _species();
     final speciesLabel = species?.displayName ?? post.species;
@@ -1879,14 +1975,24 @@ class _FeedPostPage extends ConsumerWidget {
     final hasLure = post.lure != null && post.lure!.isNotEmpty;
     final lureText = hasLure
         ? (post.lureColor?.isNotEmpty == true
-            ? '${post.lure} · ${post.lureColor}'
-            : post.lure!)
+              ? '${post.lure} · ${post.lureColor}'
+              : post.lure!)
         : null;
-    final authorName = post.userName?.isNotEmpty == true
-        ? post.userName!
-        : 'Angler:in';
+    final authorProfile = ref
+        .watch(userProfileProvider(post.userId))
+        .valueOrNull;
+    final liveName = authorProfile?.displayName?.trim();
+    final livePhoto = authorProfile?.photoUrl;
+    final authorName = (liveName != null && liveName.isNotEmpty)
+        ? liveName
+        : (post.userName?.isNotEmpty == true ? post.userName! : 'Angler:in');
+    final authorPhotoUrl = (livePhoto != null && livePhoto.isNotEmpty)
+        ? livePhoto
+        : post.userPhotoUrl;
     final me = ref.watch(currentUserProvider);
-    final liked = me != null && post.likedBy.contains(me.uid);
+    final serverLiked = me != null && post.likedBy.contains(me.uid);
+    final liked = _likedOverride ?? serverLiked;
+    final likeCount = (post.likeCount + _countDelta).clamp(0, 1 << 30);
 
     return Stack(
       children: [
@@ -1944,18 +2050,11 @@ class _FeedPostPage extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         _FeedActionButton(
-                          icon: liked
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                          iconColor:
-                              liked ? ApexColors.scoreLow : Colors.white,
-                          count: post.likeCount,
+                          icon: liked ? Icons.favorite : Icons.favorite_border,
+                          iconColor: liked ? ApexColors.scoreLow : Colors.white,
+                          count: likeCount,
                           highlighted: liked,
-                          onTap: me == null
-                              ? null
-                              : () => ref
-                                  .read(feedServiceProvider)
-                                  .toggleLike(post.id),
+                          onTap: me == null ? null : _onLikeTap,
                         ),
                         const SizedBox(height: 14),
                         _FeedActionButton(
@@ -1981,8 +2080,7 @@ class _FeedPostPage extends ConsumerWidget {
 
               // Floating Glas-Pills (auf dem Bild, knapp ueber dem Sheet).
               Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -2006,11 +2104,7 @@ class _FeedPostPage extends ConsumerWidget {
                         accent: true,
                       ),
                     if (hasLure)
-                      _metaPill(
-                        c,
-                        Icons.set_meal_outlined,
-                        lureText!,
-                      ),
+                      _metaPill(c, Icons.set_meal_outlined, lureText!),
                   ],
                 ),
               ),
@@ -2018,7 +2112,8 @@ class _FeedPostPage extends ConsumerWidget {
               // Floating Blur-Sheet \u2013 nur Spezies/Gewicht + Autor.
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20)),
+                  top: Radius.circular(20),
+                ),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     boxShadow: [
@@ -2036,8 +2131,7 @@ class _FeedPostPage extends ConsumerWidget {
                       child: SafeArea(
                         top: false,
                         child: Padding(
-                          padding:
-                              const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
@@ -2079,59 +2173,81 @@ class _FeedPostPage extends ConsumerWidget {
                               ),
                               const SizedBox(width: 12),
                               // Autor: Name + Datum + Avatar (rechts).
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.center,
-                                children: [
-                                  Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.end,
-                                    children: [
-                                      ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 140,
-                                        ),
-                                        child: Text(
-                                          authorName,
-                                          textAlign: TextAlign.end,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: c.textPrimary,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13,
+                              // Tap → öffentliches Profil des Autors.
+                              InkWell(
+                                onTap: () =>
+                                    context.push('/user/${post.userId}'),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 140,
+                                          ),
+                                          child: Text(
+                                            authorName,
+                                            textAlign: TextAlign.end,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: c.textPrimary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        AppDateFormats.dayMonthYearShort
-                                            .format(post.caughtAt),
-                                        style: TextStyle(
-                                          color: c.textMuted,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          AppDateFormats.dayMonthYearShort
+                                              .format(post.caughtAt),
+                                          style: TextStyle(
+                                            color: c.textMuted,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(width: 8),
-                                  CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: c.border,
-                                    backgroundImage: (post.userPhotoUrl !=
-                                                null &&
-                                            post.userPhotoUrl!.isNotEmpty)
-                                        ? NetworkImage(post.userPhotoUrl!)
-                                        : null,
-                                    child: (post.userPhotoUrl == null ||
-                                            post.userPhotoUrl!.isEmpty)
-                                        ? Icon(Icons.person,
-                                            size: 18, color: c.textMuted)
-                                        : null,
-                                  ),
-                                ],
+                                      ],
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 22,
+                                          backgroundColor: c.border,
+                                          backgroundImage:
+                                              (authorPhotoUrl != null &&
+                                                  authorPhotoUrl.isNotEmpty)
+                                              ? NetworkImage(authorPhotoUrl)
+                                              : null,
+                                          child:
+                                              (authorPhotoUrl == null ||
+                                                  authorPhotoUrl.isEmpty)
+                                              ? Icon(
+                                                  Icons.person,
+                                                  size: 24,
+                                                  color: c.textMuted,
+                                                )
+                                              : null,
+                                        ),
+                                        if (me != null && me.uid != post.userId)
+                                          Positioned(
+                                            right: -10,
+                                            bottom: -10,
+                                            child: _QuickFollowBadge(
+                                              targetUid: post.userId,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -2157,9 +2273,7 @@ class _FeedPostPage extends ConsumerWidget {
     String text, {
     bool accent = false,
   }) {
-    final iconColor = accent
-        ? ApexColors.primary
-        : Colors.white.withAlpha(230);
+    final iconColor = accent ? ApexColors.primary : Colors.white.withAlpha(230);
     final bgAlpha = accent ? 90 : 70;
     final borderColor = accent
         ? ApexColors.primary.withAlpha(120)
@@ -2169,8 +2283,7 @@ class _FeedPostPage extends ConsumerWidget {
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: Colors.black.withAlpha(bgAlpha),
             borderRadius: BorderRadius.circular(999),
@@ -2189,9 +2302,7 @@ class _FeedPostPage extends ConsumerWidget {
                   fontWeight: FontWeight.w700,
                   color: accent ? Colors.white : Colors.white,
                   letterSpacing: 0.4,
-                  shadows: const [
-                    Shadow(color: Colors.black54, blurRadius: 4),
-                  ],
+                  shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
                 ),
               ),
             ],
@@ -2224,8 +2335,7 @@ class _FeedPostPage extends ConsumerWidget {
       builder: (sheetCtx) => SafeArea(
         top: false,
         child: ClipRRect(
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           child: BackdropFilter(
             filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
@@ -2243,8 +2353,10 @@ class _FeedPostPage extends ConsumerWidget {
                     ),
                   ),
                   ListTile(
-                    leading: Icon(Icons.flag_outlined,
-                        color: ApexColors.scoreLow),
+                    leading: Icon(
+                      Icons.flag_outlined,
+                      color: ApexColors.scoreLow,
+                    ),
                     title: Text(
                       'Beitrag melden',
                       style: TextStyle(
@@ -2264,8 +2376,7 @@ class _FeedPostPage extends ConsumerWidget {
                     },
                   ),
                   ListTile(
-                    leading: Icon(Icons.block,
-                        color: ApexColors.scoreLow),
+                    leading: Icon(Icons.block, color: ApexColors.scoreLow),
                     title: Text(
                       'Nutzer blockieren',
                       style: TextStyle(
@@ -2344,13 +2455,17 @@ class _FeedActionButtonState extends State<_FeedActionButton>
   Widget build(BuildContext context) {
     final scale = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 1.35)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(
+          begin: 1.0,
+          end: 1.35,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 40,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 1.35, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween(
+          begin: 1.35,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 60,
       ),
     ]).animate(_ctrl);
@@ -2412,9 +2527,7 @@ class _FeedActionButtonState extends State<_FeedActionButton>
             fontSize: 13,
             color: Colors.white,
             letterSpacing: 0.3,
-            shadows: [
-              Shadow(color: Colors.black87, blurRadius: 6),
-            ],
+            shadows: [Shadow(color: Colors.black87, blurRadius: 6)],
           ),
         ),
       ],
@@ -2425,9 +2538,7 @@ class _FeedActionButtonState extends State<_FeedActionButton>
   static String _fmt(int n) {
     if (n < 1000) return '$n';
     final k = n / 1000;
-    return k < 10
-        ? '${k.toStringAsFixed(1)}k'
-        : '${k.toStringAsFixed(0)}k';
+    return k < 10 ? '${k.toStringAsFixed(1)}k' : '${k.toStringAsFixed(0)}k';
   }
 }
 
@@ -2437,8 +2548,7 @@ class _FeedCommentsSheet extends ConsumerStatefulWidget {
   final String postId;
 
   @override
-  ConsumerState<_FeedCommentsSheet> createState() =>
-      _FeedCommentsSheetState();
+  ConsumerState<_FeedCommentsSheet> createState() => _FeedCommentsSheetState();
 }
 
 class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
@@ -2475,9 +2585,7 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
       _setReply(null, null);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kommentar fehlgeschlagen: $e')),
-      );
+      AppToast.error(context, 'Kommentar fehlgeschlagen: $e');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -2511,8 +2619,8 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
           backgroundColor: c.border,
           backgroundImage:
               (cm.userPhotoUrl != null && cm.userPhotoUrl!.isNotEmpty)
-                  ? NetworkImage(cm.userPhotoUrl!)
-                  : null,
+              ? NetworkImage(cm.userPhotoUrl!)
+              : null,
           child: (cm.userPhotoUrl == null || cm.userPhotoUrl!.isEmpty)
               ? Icon(Icons.person, size: iconSize, color: c.textMuted)
               : null,
@@ -2540,10 +2648,7 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                   const SizedBox(width: 6),
                   Text(
                     _relTime(cm.createdAt),
-                    style: TextStyle(
-                      color: c.textMuted,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: c.textMuted, fontSize: 11),
                   ),
                 ],
               ),
@@ -2569,7 +2674,9 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 2),
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     child: Text(
                       'Antworten',
                       style: TextStyle(
@@ -2586,11 +2693,17 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
         ),
         if (isMine)
           IconButton(
-            icon: Icon(Icons.delete_outline,
-                size: 18, color: c.textMuted),
-            onPressed: () => ref
-                .read(feedServiceProvider)
-                .deleteComment(widget.postId, cm.id),
+            icon: Icon(Icons.delete_outline, size: 18, color: c.textMuted),
+            onPressed: () async {
+              try {
+                await ref
+                    .read(feedServiceProvider)
+                    .deleteComment(widget.postId, cm.id);
+              } catch (e) {
+                if (!context.mounted) return;
+                AppToast.error(context, 'Löschen fehlgeschlagen: $e');
+              }
+            },
           ),
         if (!isMine && me != null)
           PopupMenuButton<String>(
@@ -2620,11 +2733,13 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                 value: 'report',
                 child: Row(
                   children: [
-                    Icon(Icons.flag_outlined,
-                        size: 18, color: ApexColors.scoreLow),
+                    Icon(
+                      Icons.flag_outlined,
+                      size: 18,
+                      color: ApexColors.scoreLow,
+                    ),
                     const SizedBox(width: 8),
-                    Text('Melden',
-                        style: TextStyle(color: c.textPrimary)),
+                    Text('Melden', style: TextStyle(color: c.textPrimary)),
                   ],
                 ),
               ),
@@ -2632,11 +2747,12 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                 value: 'block',
                 child: Row(
                   children: [
-                    Icon(Icons.block,
-                        size: 18, color: ApexColors.scoreLow),
+                    Icon(Icons.block, size: 18, color: ApexColors.scoreLow),
                     const SizedBox(width: 8),
-                    Text('Nutzer blockieren',
-                        style: TextStyle(color: c.textPrimary)),
+                    Text(
+                      'Nutzer blockieren',
+                      style: TextStyle(color: c.textPrimary),
+                    ),
                   ],
                 ),
               ),
@@ -2650,8 +2766,7 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
     final me = ref.watch(currentUserProvider);
-    final commentsAsync =
-        ref.watch(feedCommentsProvider(widget.postId));
+    final commentsAsync = ref.watch(feedCommentsProvider(widget.postId));
     final mediaInsets = MediaQuery.of(context).viewInsets.bottom;
 
     return DraggableScrollableSheet(
@@ -2661,16 +2776,13 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
       expand: false,
       builder: (ctx, scrollCtrl) {
         return ClipRRect(
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: BackdropFilter(
             filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(
               decoration: BoxDecoration(
                 color: c.background.withAlpha(235),
-                border: Border(
-                  top: BorderSide(color: c.border.withAlpha(120)),
-                ),
+                border: Border(top: BorderSide(color: c.border.withAlpha(120))),
               ),
               child: Column(
                 children: [
@@ -2684,13 +2796,15 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                     ),
                   ),
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Icon(Icons.mode_comment_outlined,
-                            size: 18, color: c.textMuted),
+                        Icon(
+                          Icons.mode_comment_outlined,
+                          size: 18,
+                          color: c.textMuted,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Kommentare',
@@ -2718,227 +2832,213 @@ class _FeedCommentsSheetState extends ConsumerState<_FeedCommentsSheet> {
                       ],
                     ),
                   ),
-                  Container(
-                    height: 1,
-                    color: c.border.withAlpha(80),
-                  ),
-                Expanded(
-                  child: commentsAsync.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(
-                        color: ApexColors.primary,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                    error: (e, _) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          'Konnte Kommentare nicht laden.',
-                          style: TextStyle(color: c.textMuted),
+                  Container(height: 1, color: c.border.withAlpha(80)),
+                  Expanded(
+                    child: commentsAsync.when(
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(
+                          color: ApexColors.primary,
+                          strokeWidth: 2,
                         ),
                       ),
-                    ),
-                    data: (list) {
-                      if (list.isEmpty) {
-                        return Center(
+                      error: (e, _) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
                           child: Text(
-                            'Noch keine Kommentare. Mach den Anfang!',
+                            'Konnte Kommentare nicht laden.',
                             style: TextStyle(color: c.textMuted),
                           ),
-                        );
-                      }
-                      // Top-Level + Replies (parentId) aufteilen.
-                      final tops = <FeedComment>[];
-                      final replies = <String, List<FeedComment>>{};
-                      for (final cm in list) {
-                        if (cm.parentId == null) {
-                          tops.add(cm);
-                        } else {
-                          replies
-                              .putIfAbsent(cm.parentId!, () => [])
-                              .add(cm);
-                        }
-                      }
-                      return ListView.builder(
-                        controller: scrollCtrl,
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                        itemCount: tops.length,
-                        itemBuilder: (context, i) {
-                          final top = tops[i];
-                          final children =
-                              replies[top.id] ?? const <FeedComment>[];
-                          return Padding(
-                            padding: EdgeInsets.only(
-                                top: i == 0 ? 0 : 12),
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                _commentTile(c, me, top, indent: 0),
-                                for (final r in children)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                        top: 10, left: 36),
-                                    child: _commentTile(c, me, r,
-                                        indent: 1),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                // Eingabefeld unten – als rounded Glas-Pill.
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top:
-                          BorderSide(color: c.border.withAlpha(120)),
-                    ),
-                  ),
-                  padding: EdgeInsets.fromLTRB(
-                      14, 10, 10, 10 + mediaInsets),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Reply-Indikator: zeigt, an wen gerade geantwortet wird.
-                      if (_replyToId != null) ...[
-                        Container(
-                          margin:
-                              const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.fromLTRB(
-                              12, 6, 6, 6),
-                          decoration: BoxDecoration(
-                            color: ApexColors.primary.withAlpha(30),
-                            borderRadius:
-                                BorderRadius.circular(999),
-                            border: Border.all(
-                              color: ApexColors.primary.withAlpha(80),
-                              width: 0.7,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.reply,
-                                  size: 14,
-                                  color: ApexColors.primary),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Antwort an ${_replyToName ?? ''}',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: c.textPrimary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                              ),
-                              InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: () => _setReply(null, null),
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.all(4),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 14,
-                                    color: c.textMuted,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: c.surface,
-                                borderRadius:
-                                    BorderRadius.circular(24),
-                                border: Border.all(
-                                    color: c.border.withAlpha(160)),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 4),
-                              child: TextField(
-                                controller: _ctrl,
-                                focusNode: _focus,
-                                enabled: me != null && !_sending,
-                                minLines: 1,
-                                maxLines: 4,
-                                textInputAction:
-                                    TextInputAction.send,
-                                onSubmitted: (_) => _send(),
-                                style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontSize: 14,
-                                ),
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  border: InputBorder.none,
-                                  hintText: me == null
-                                      ? 'Anmelden, um zu kommentieren'
-                                      : _replyToId != null
-                                          ? 'Antworten…'
-                                          : 'Kommentar schreiben…',
-                                  hintStyle: TextStyle(
-                                      color: c.textMuted),
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(
-                                          vertical: 10),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Material(
-                            color: ApexColors.primary,
-                            shape: const CircleBorder(),
-                            elevation: 0,
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: me == null || _sending
-                                  ? null
-                                  : _send,
-                              child: SizedBox(
-                                width: 40,
-                                height: 40,
-                                child: Center(
-                                  child: _sending
-                                      ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child:
-                                          CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.send,
-                                      color: Colors.white,
-                                      size: 18,
-                                    ),
-                            ),
-                          ),
                         ),
                       ),
-                    ],
+                      data: (list) {
+                        if (list.isEmpty) {
+                          return Center(
+                            child: Text(
+                              'Noch keine Kommentare. Mach den Anfang!',
+                              style: TextStyle(color: c.textMuted),
+                            ),
+                          );
+                        }
+                        // Top-Level + Replies (parentId) aufteilen.
+                        final tops = <FeedComment>[];
+                        final replies = <String, List<FeedComment>>{};
+                        for (final cm in list) {
+                          if (cm.parentId == null) {
+                            tops.add(cm);
+                          } else {
+                            replies.putIfAbsent(cm.parentId!, () => []).add(cm);
+                          }
+                        }
+                        return ListView.builder(
+                          controller: scrollCtrl,
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                          itemCount: tops.length,
+                          itemBuilder: (context, i) {
+                            final top = tops[i];
+                            final children =
+                                replies[top.id] ?? const <FeedComment>[];
+                            return Padding(
+                              padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _commentTile(c, me, top, indent: 0),
+                                  for (final r in children)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: 10,
+                                        left: 36,
+                                      ),
+                                      child: _commentTile(c, me, r, indent: 1),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
-                    ],
+                  // Eingabefeld unten – als rounded Glas-Pill.
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: c.border.withAlpha(120)),
+                      ),
+                    ),
+                    padding: EdgeInsets.fromLTRB(14, 10, 10, 10 + mediaInsets),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Reply-Indikator: zeigt, an wen gerade geantwortet wird.
+                        if (_replyToId != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+                            decoration: BoxDecoration(
+                              color: ApexColors.primary.withAlpha(30),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: ApexColors.primary.withAlpha(80),
+                                width: 0.7,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.reply,
+                                  size: 14,
+                                  color: ApexColors.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Antwort an ${_replyToName ?? ''}',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: c.textPrimary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ),
+                                InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => _setReply(null, null),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: c.textMuted,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: c.surface,
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: c.border.withAlpha(160),
+                                  ),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                child: TextField(
+                                  controller: _ctrl,
+                                  focusNode: _focus,
+                                  enabled: me != null && !_sending,
+                                  minLines: 1,
+                                  maxLines: 4,
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (_) => _send(),
+                                  style: TextStyle(
+                                    color: c.textPrimary,
+                                    fontSize: 14,
+                                  ),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    border: InputBorder.none,
+                                    hintText: me == null
+                                        ? 'Anmelden, um zu kommentieren'
+                                        : _replyToId != null
+                                        ? 'Antworten…'
+                                        : 'Kommentar schreiben…',
+                                    hintStyle: TextStyle(color: c.textMuted),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Material(
+                              color: ApexColors.primary,
+                              shape: const CircleBorder(),
+                              elevation: 0,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: me == null || _sending ? null : _send,
+                                child: SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: Center(
+                                    child: _sending
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.send,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
               ),
             ),
           ),
@@ -2972,8 +3072,7 @@ class _SharedBadge extends StatelessWidget {
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
           decoration: BoxDecoration(
             color: Colors.black.withAlpha(95),
             borderRadius: BorderRadius.circular(999),
@@ -3036,8 +3135,9 @@ class _SharedBadge extends StatelessWidget {
   }
 
   Widget _badgeStat(IconData icon, int count, {bool highlighted = false}) {
-    final color =
-        highlighted ? ApexColors.scoreLow : Colors.white.withAlpha(230);
+    final color = highlighted
+        ? ApexColors.scoreLow
+        : Colors.white.withAlpha(230);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -3075,22 +3175,12 @@ class _FeedMoreButton extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.black.withAlpha(80),
-          border: Border.all(
-            color: Colors.white.withAlpha(40),
-            width: 0.7,
-          ),
+          border: Border.all(color: Colors.white.withAlpha(40), width: 0.7),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(120),
-              blurRadius: 12,
-            ),
+            BoxShadow(color: Colors.black.withAlpha(120), blurRadius: 12),
           ],
         ),
-        child: const Icon(
-          Icons.more_vert,
-          color: Colors.white,
-          size: 20,
-        ),
+        child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
       ),
     );
   }
@@ -3114,31 +3204,42 @@ class _FeedHeroBackdrop extends StatelessWidget {
       return Stack(
         fit: StackFit.expand,
         children: [
+          // Hintergrund: dasselbe Foto stark geblurrt + abgedunkelt,
+          // damit das Vollbild nicht abgeschnitten werden muss.
+          Image.network(
+            photoUrl!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => ColoredBox(color: c.background),
+          ),
+          BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            child: Container(color: Colors.black.withAlpha(120)),
+          ),
+          // Vordergrund: Foto füllt komplett, Crop ist okay damit
+          // keine schwarzen Ränder oben/unten entstehen.
           Image.network(
             photoUrl!,
             fit: BoxFit.cover,
             loadingBuilder: (ctx, child, progress) {
               if (progress == null) return child;
-              return ColoredBox(
-                color: c.background,
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    color: ApexColors.primary,
-                    strokeWidth: 2,
-                  ),
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: ApexColors.primary,
+                  strokeWidth: 2,
                 ),
               );
             },
             errorBuilder: (_, __, ___) =>
                 _FallbackHero(asset: speciesAsset, label: speciesLabel),
           ),
-          // Sanftes Vignetten-Gradient für Lesbarkeit.
+          // Sanftes Vignetten-Gradient für Lesbarkeit der unteren Pills.
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [Colors.transparent, Colors.black54],
+                stops: [0.6, 1.0],
               ),
             ),
           ),
@@ -3157,6 +3258,24 @@ class _FallbackHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
+    if (asset != null) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(asset!, fit: BoxFit.cover),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.black54],
+                stops: [0.6, 1.0],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -3166,12 +3285,307 @@ class _FallbackHero extends StatelessWidget {
         ),
       ),
       alignment: Alignment.center,
-      child: asset != null
-          ? Opacity(
-              opacity: 0.6,
-              child: Image.asset(asset!, height: 220, fit: BoxFit.contain),
-            )
-          : Icon(Icons.image_not_supported, size: 64, color: c.textMuted),
+      child: Icon(Icons.image_not_supported, size: 64, color: c.textMuted),
     );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUICK FOLLOW BADGE (Avatar-Overlay im Feed)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Kleiner runder „+"-Badge, der unten rechts auf dem Autor-Avatar sitzt.
+/// Optimistisch: Tap setzt den Folge-Status sofort, der Server-Write laeuft
+/// im Hintergrund. Nach erfolgreichem Folgen verschwindet der Badge.
+class _QuickFollowBadge extends ConsumerStatefulWidget {
+  const _QuickFollowBadge({required this.targetUid});
+  final String targetUid;
+
+  @override
+  ConsumerState<_QuickFollowBadge> createState() => _QuickFollowBadgeState();
+}
+
+class _QuickFollowBadgeState extends ConsumerState<_QuickFollowBadge> {
+  bool? _override;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isFollowingAsync = ref.watch(isFollowingProvider(widget.targetUid));
+    final serverFollowing = isFollowingAsync.valueOrNull ?? false;
+    // Override aufloesen, sobald der Server eingefangen hat — egal ob
+    // wir den Toggle hier oder anderswo (Profil-Screen) ausgeloest haben.
+    if (_override != null && _override == serverFollowing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _override == serverFollowing) {
+          setState(() => _override = null);
+        }
+      });
+    }
+    final isFollowing = _override ?? serverFollowing;
+
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Center(
+        child: Material(
+          color: isFollowing ? Colors.white : ApexColors.primary,
+          shape: CircleBorder(
+            side: BorderSide(
+              color: isFollowing ? ApexColors.primary : Colors.white,
+              width: 2,
+            ),
+          ),
+          child: InkWell(
+            onTap: _busy ? null : _toggle,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: Icon(
+                isFollowing ? Icons.remove : Icons.add,
+                size: 16,
+                color: isFollowing ? ApexColors.primary : Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggle() async {
+    HapticFeedback.lightImpact();
+    final isFollowingAsync = ref.read(isFollowingProvider(widget.targetUid));
+    final serverFollowing = isFollowingAsync.valueOrNull ?? false;
+    final currentlyFollowing = _override ?? serverFollowing;
+    final next = !currentlyFollowing;
+    setState(() {
+      _override = next;
+      _busy = true;
+    });
+    final blocked =
+        ref.read(blockedUidsProvider).valueOrNull ?? const <String>{};
+    try {
+      await UserProfileService.instance.toggleFollow(
+        widget.targetUid,
+        blockedUids: blocked,
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _override = currentlyFollowing);
+      AppToast.error(
+        context,
+        e.message == 'blocked'
+            ? 'Du kannst diesem Nutzer nicht folgen, weil du ihn blockiert hast.'
+            : 'Aktion nicht möglich.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _override = currentlyFollowing);
+      AppToast.error(context, 'Konnte Status nicht ändern.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SKELETON LOADER
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _CatchSkeletonLoader extends StatelessWidget {
+  const _CatchSkeletonLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: 5,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) =>
+          _SkeletonCard(delay: Duration(milliseconds: index * 80)),
+    );
+  }
+}
+
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard({required this.delay});
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    final base = c.surface;
+    final shine = context.isDark
+        ? const Color(0xFF1E2A38)
+        : const Color(0xFFE8EEF4);
+
+    return _Shimmer(
+      baseColor: base,
+      highlightColor: shine,
+      child: Container(
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Hero-Bild-Platzhalter (16:9)
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: shine,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Titel-Zeile
+                  Row(
+                    children: [
+                      _SkeletonBox(width: 120, height: 18, color: shine),
+                      const Spacer(),
+                      _SkeletonBox(width: 60, height: 14, color: shine),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Untertitel
+                  _SkeletonBox(width: 180, height: 12, color: shine),
+                  const SizedBox(height: 12),
+                  // Tags-Zeile
+                  Row(
+                    children: [
+                      _SkeletonBox(
+                        width: 64,
+                        height: 22,
+                        color: shine,
+                        radius: 8,
+                      ),
+                      const SizedBox(width: 8),
+                      _SkeletonBox(
+                        width: 64,
+                        height: 22,
+                        color: shine,
+                        radius: 8,
+                      ),
+                      const SizedBox(width: 8),
+                      _SkeletonBox(
+                        width: 48,
+                        height: 22,
+                        color: shine,
+                        radius: 8,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate(delay: delay).fadeIn(duration: 300.ms);
+  }
+}
+
+class _SkeletonBox extends StatelessWidget {
+  const _SkeletonBox({
+    required this.width,
+    required this.height,
+    required this.color,
+    this.radius = 6,
+  });
+  final double width;
+  final double height;
+  final Color color;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: width,
+    height: height,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(radius),
+    ),
+  );
+}
+
+class _Shimmer extends StatefulWidget {
+  const _Shimmer({
+    required this.child,
+    required this.baseColor,
+    required this.highlightColor,
+  });
+  final Widget child;
+  final Color baseColor;
+  final Color highlightColor;
+
+  @override
+  State<_Shimmer> createState() => _ShimmerState();
+}
+
+class _ShimmerState extends State<_Shimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+    _anim = Tween<double>(
+      begin: -1.5,
+      end: 2.5,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutSine));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      child: widget.child,
+      builder: (context, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            stops: const [0.0, 0.5, 1.0],
+            colors: [widget.baseColor, widget.highlightColor, widget.baseColor],
+            transform: _SlidingGradientTransform(_anim.value),
+          ).createShader(bounds),
+          child: child!,
+        );
+      },
+    );
+  }
+}
+
+class _SlidingGradientTransform extends GradientTransform {
+  const _SlidingGradientTransform(this.slidePercent);
+  final double slidePercent;
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    return Matrix4.translationValues(bounds.width * slidePercent, 0, 0);
   }
 }

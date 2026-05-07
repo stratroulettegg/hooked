@@ -44,11 +44,10 @@ class FeedSeenNotifier extends StateNotifier<Map<String, FeedSeenCounts>> {
     await prefs.setString('$_kPrefix$postId', '$likes:$comments');
   }
 
-  FeedSeenCounts get(String postId) =>
-      state[postId] ?? const FeedSeenCounts();
+  FeedSeenCounts get(String postId) => state[postId] ?? const FeedSeenCounts();
 }
 
 final feedSeenProvider =
     StateNotifierProvider<FeedSeenNotifier, Map<String, FeedSeenCounts>>(
-  (_) => FeedSeenNotifier(),
-);
+      (_) => FeedSeenNotifier(),
+    );
