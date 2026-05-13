@@ -16,6 +16,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/catch_entry.dart';
 import '../../../shared/services/app_providers.dart';
 import '../../../shared/utils/permission_dialogs.dart';
+import '../../../shared/widgets/permission_pre_prompt.dart';
 import 'voice_catch_parser.dart';
 
 /// Voice-Quick-Add für Fänge — Look-and-feel einer Sprachnachricht.
@@ -81,6 +82,11 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
   }
 
   Future<void> _startListening() async {
+    final ok = await PermissionPrePrompt.ensure(
+      context,
+      PermissionKind.microphone,
+    );
+    if (!ok || !mounted) return;
     _userStopped = false;
     _accumulatedTranscript = '';
     setState(() {
@@ -398,7 +404,10 @@ class _VoiceQuickAddSheetState extends ConsumerState<VoiceQuickAddSheet> {
         return _errorMessage ?? 'Da ist etwas schiefgelaufen.';
       case _Stage.denied:
         return _errorMessage ??
-            'Mikrofon-Berechtigung fehlt. Bitte in den Einstellungen erlauben.';
+            'Mikrofon oder Spracherkennung nicht verfügbar.\n'
+                'Auf manchen Android-Geräten (z. B. Samsung) muss '
+                '„Spracherkennung von Google" als Standard aktiviert sein '
+                '(Einstellungen → Allgemeine Verwaltung → Sprache & Eingabe).';
     }
   }
 

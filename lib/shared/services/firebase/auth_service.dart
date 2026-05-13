@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../utils/image_compression.dart';
+import '../local_db_anchor.dart';
 import 'firebase_bootstrap.dart';
 
 /// Ergebnis eines Auth-Versuchs.
@@ -55,7 +56,7 @@ class AuthService {
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      final cred = await _auth.signInWithCredential(credential);
+      final cred = await _signInOrLink(credential);
       return AuthResult.success(cred.user);
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(e.code, _readableMessage(e));
@@ -96,7 +97,7 @@ class AuthService {
         rawNonce: rawNonce,
         accessToken: appleCred.authorizationCode,
       );
-      final cred = await _auth.signInWithCredential(oauth);
+      final cred = await _signInOrLink(oauth);
 
       // Apple liefert den Namen nur beim allerersten Login \u2014 jetzt persistieren.
       final displayName = [
@@ -202,6 +203,15 @@ class AuthService {
       debugPrint('auth GoogleSignIn signOut: $e');
     }
     await _auth.signOut();
+    // Bewusst KEIN signInAnonymously() hier — ein frischer Anon-Login
+    // würde sofort einen neuen UID-DB-Slot aktivieren und damit die
+    // lokal vorhandenen Daten des soeben abgemeldeten Users „verstecken"
+    // (apex_<oldUid>.db ↔ apex_<neueUid>.db). Stattdessen bleibt der
+    // letzte DB-Slot aktiv, lokale Fänge/Spots/Trips bleiben sichtbar
+    // und beim erneuten Login mit demselben Account liefert Firebase
+    // wieder die gleiche UID → DB matcht. Beim nächsten Cold-Start
+    // legt `FirebaseBootstrap.ensureSignedIn()` ggf. eine neue anonyme
+    // Session an.
   }
 
   /// Löscht den Account des aktuellen Users vollständig (DSGVO Art. 17 +
@@ -233,8 +243,16 @@ class AuthService {
     // Verifizieren: existiert der User serverseitig noch?
     final gone = await _userIsGone(user);
     await _signOutLocal();
-
+    // Nach erfolgreicher Löschung sofort eine neue anonyme Session
+    // anlegen, damit die App nahtlos im Anon-Modus weiterläuft —
+    // sonst bleibt der Auth-State auf `null` hängen, bis der User
+    // die App neu startet.
     if (caughtError == null || gone) {
+      try {
+        await _auth.signInAnonymously();
+      } catch (e) {
+        debugPrint('post-delete signInAnonymously failed: $e');
+      }
       return const AuthResult.success(null);
     }
 
@@ -293,9 +311,64 @@ class AuthService {
     } catch (e) {
       debugPrint('auth FirebaseAuth signOut (local): $e');
     }
+    // Bewusst KEIN signInAnonymously() hier: ein neuer Anon-Login würde
+    // einen frischen UID-DB-Slot erzeugen und damit die lokal sichtbaren
+    // Fänge/Spots/Trips des soeben abgemeldeten Users „verändern“ (es
+    // wechselt auf einen leeren `apex_<neueUid>.db`). Beim nächsten
+    // App-Start übernimmt `FirebaseBootstrap.ensureSignedIn()` das
+    // Anlegen einer neuen anonymen Session.
   }
 
   // \u2500\u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+  // \u2500\u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+  /// Wertet eine anonyme Session per [User.linkWithCredential] zu einem
+  /// echten Account auf — die UID bleibt erhalten, sodass die lokale
+  /// `apex_<uid>.db` und der Photos-Ordner ohne Migration weitergenutzt
+  /// werden können.
+  ///
+  /// Fällt auf `signInWithCredential` zurück, wenn:
+  /// - kein anonymer User aktiv ist (regulärer Login),
+  /// - der OAuth-Account bereits einer anderen Firebase-UID zugeordnet ist
+  ///   (`credential-already-in-use`) — in dem Fall wird die anonyme
+  ///   Session verworfen und mit dem bestehenden Account weitergearbeitet.
+  ///   Die anonyme `apex_<oldUid>.db` bleibt auf dem Gerät liegen und
+  ///   kann später per Merge-Wizard übernommen werden (Folge-PR).
+  Future<UserCredential> _signInOrLink(AuthCredential credential) async {
+    final current = _auth.currentUser;
+    if (current != null && current.isAnonymous) {
+      final anonUid = current.uid;
+      try {
+        return await current.linkWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use' ||
+            e.code == 'email-already-in-use' ||
+            e.code == 'provider-already-linked') {
+          if (kDebugMode) {
+            // ignore: avoid_print
+            print(
+              '[Auth] link failed (${e.code}) — '
+              'falling back to signInWithCredential',
+            );
+          }
+          // Wichtig: Anon-UID hier persistieren, BEVOR signInWithCredential
+          // den Auth-State umschaltet. So bleibt die lokale Anon-DB nach
+          // einem späteren Logout/Account-Delete erreichbar — der
+          // Auth-Listener in main.dart kann sich nicht darauf verlassen,
+          // dass er die Anon-UID rechtzeitig sieht (Stream-Race).
+          try {
+            await LocalDbAnchor.setPreviousAnonUid(anonUid);
+          } catch (e) {
+            debugPrint('setPreviousAnonUid failed: $e');
+          }
+          return await _auth.signInWithCredential(credential);
+        }
+        rethrow;
+      }
+    }
+    return _auth.signInWithCredential(credential);
+  }
 
   AuthResult _notConfigured() => const AuthResult.failure(
     'not-configured',

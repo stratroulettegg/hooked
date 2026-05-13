@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/theme/app_theme.dart';
 import '../services/app_paths.dart';
 import '../utils/permission_dialogs.dart';
+import 'permission_pre_prompt.dart';
 
 /// Wiederverwendbares Bild-Auswahlfeld für Fang & Spot.
 ///
@@ -38,6 +39,13 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
 
   Future<void> _pick(ImageSource source) async {
     if (_busy) return;
+    final ok = await PermissionPrePrompt.ensure(
+      context,
+      source == ImageSource.camera
+          ? PermissionKind.camera
+          : PermissionKind.photos,
+    );
+    if (!ok || !mounted) return;
     setState(() => _busy = true);
     try {
       final img = await _picker.pickImage(

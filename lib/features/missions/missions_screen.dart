@@ -22,38 +22,118 @@ class MissionsScreen extends ConsumerWidget {
         ),
         error: (e, _) => Center(child: Text('Fehler: $e')),
         data: (missions) {
-          final completed = missions.where((m) => m.isCompleted).toList();
-          final active = missions.where((m) => !m.isCompleted).toList();
+          // Gruppieren nach Typ — Reihenfolge ist die UI-Reihenfolge.
+          final daily = missions
+              .where((m) => m.type == MissionType.daily)
+              .toList();
+          final weekly = missions
+              .where((m) => m.type == MissionType.weekly)
+              .toList();
+          final seasonal = missions
+              .where((m) => m.type == MissionType.seasonal)
+              .toList();
+          final achievements = missions
+              .where((m) => m.type == MissionType.achievement)
+              .toList();
+
+          // Achievements: aktiv (mit Fortschritt > 0 zuerst) vor abgeschlossen.
+          int achRank(Mission m) {
+            if (m.isCompleted) return 2;
+            if (m.progress > 0) return 0;
+            return 1;
+          }
+
+          achievements.sort((a, b) {
+            final r = achRank(a).compareTo(achRank(b));
+            if (r != 0) return r;
+            return b.progressPercent.compareTo(a.progressPercent);
+          });
+
+          final now = DateTime.now();
+          final dailyEnd = MissionSeed.currentDayEnd(now);
+          final weeklyEnd = MissionSeed.currentWeekEnd(now);
+          final seasonEnd = MissionSeed.currentSeasonEnd(now);
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
             children: [
-              // Rang-Banner
               const RankBanner(),
               const SizedBox(height: 16),
-
-              // Köderlevel-Einstieg
               _LureLevelsEntry(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // Aktive Missionen
-              if (active.isNotEmpty) ...[
-                _SectionHeader('AKTIV', active.length),
-                const SizedBox(height: 12),
-                ...active.map(
+              // Heute
+              if (daily.isNotEmpty) ...[
+                _MissionGroupHeader(
+                  title: 'HEUTE',
+                  subtitle: _formatRemaining(now, dailyEnd, granularity: 'h'),
+                  color: const Color(0xFF64B5F6),
+                  icon: Icons.wb_sunny_rounded,
+                  doneCount: daily.where((m) => m.isCompleted).length,
+                  totalCount: daily.length,
+                ),
+                const SizedBox(height: 10),
+                ...daily.map(
                   (m) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _MissionCard(mission: m),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
               ],
 
-              // Abgeschlossene Missionen
-              if (completed.isNotEmpty) ...[
-                _SectionHeader('ABGESCHLOSSEN', completed.length),
-                const SizedBox(height: 12),
-                ...completed.map(
+              // Diese Woche
+              if (weekly.isNotEmpty) ...[
+                _MissionGroupHeader(
+                  title: 'DIESE WOCHE',
+                  subtitle: _formatRemaining(now, weeklyEnd, granularity: 'd'),
+                  color: ApexColors.scoreMid,
+                  icon: Icons.calendar_view_week_rounded,
+                  doneCount: weekly.where((m) => m.isCompleted).length,
+                  totalCount: weekly.length,
+                ),
+                const SizedBox(height: 10),
+                ...weekly.map(
+                  (m) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _MissionCard(mission: m),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              // Quartal
+              if (seasonal.isNotEmpty) ...[
+                _MissionGroupHeader(
+                  title: 'QUARTAL',
+                  subtitle: _formatRemaining(now, seasonEnd, granularity: 'd'),
+                  color: const Color(0xFF81C784),
+                  icon: Icons.eco_rounded,
+                  doneCount: seasonal.where((m) => m.isCompleted).length,
+                  totalCount: seasonal.length,
+                ),
+                const SizedBox(height: 10),
+                ...seasonal.map(
+                  (m) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _MissionCard(mission: m),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              // Erfolge
+              if (achievements.isNotEmpty) ...[
+                _MissionGroupHeader(
+                  title: 'ERFOLGE',
+                  subtitle: 'Sammelbar — laufen nicht ab',
+                  color: ApexColors.strike,
+                  icon: Icons.emoji_events_rounded,
+                  doneCount: achievements.where((m) => m.isCompleted).length,
+                  totalCount: achievements.length,
+                ),
+                const SizedBox(height: 10),
+                ...achievements.map(
                   (m) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _MissionCard(mission: m),
@@ -66,37 +146,115 @@ class MissionsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  static String _formatRemaining(
+    DateTime now,
+    DateTime end, {
+    required String granularity,
+  }) {
+    final diff = end.difference(now);
+    if (diff.isNegative) return 'läuft gleich aus';
+    if (granularity == 'h') {
+      final h = diff.inHours;
+      if (h >= 1) return 'noch $h h';
+      final m = diff.inMinutes;
+      return 'noch $m min';
+    }
+    final d = diff.inDays;
+    if (d >= 1) return 'noch $d Tag${d == 1 ? '' : 'e'}';
+    final h = diff.inHours;
+    return 'noch $h h';
+  }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title, this.count);
+class _MissionGroupHeader extends StatelessWidget {
+  const _MissionGroupHeader({
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.icon,
+    required this.doneCount,
+    required this.totalCount,
+  });
+
   final String title;
-  final int count;
+  final String subtitle;
+  final Color color;
+  final IconData icon;
+  final int doneCount;
+  final int totalCount;
 
   @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
+    final pct = totalCount == 0 ? 0.0 : doneCount / totalCount;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.5,
-            color: c.textMuted,
-          ),
-        ),
-        const SizedBox(width: 8),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
-            color: c.surfaceVariant,
-            borderRadius: BorderRadius.circular(10),
+            color: color.withAlpha(38),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(
-            '$count',
-            style: TextStyle(fontSize: 10, color: c.textMuted),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                      color: c.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.surfaceVariant,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$doneCount / $totalCount',
+                      style: TextStyle(fontSize: 10, color: c.textMuted),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: pct,
+                        minHeight: 3,
+                        backgroundColor: c.border,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 10, color: c.textMuted),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ],
@@ -145,7 +303,16 @@ class _MissionCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    _TypeBadge(type: mission.type),
+                    Text(
+                      '+${mission.pointsReward}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isCompleted
+                            ? ApexColors.primary
+                            : ApexColors.scoreMid,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -165,22 +332,9 @@ class _MissionCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${mission.progress} / ${mission.goal}',
-                        style: TextStyle(fontSize: 11, color: c.textMuted),
-                      ),
-                      Text(
-                        '+${mission.pointsReward} Pkt.',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: ApexColors.scoreMid,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    '${mission.progress} / ${mission.goal}',
+                    style: TextStyle(fontSize: 11, color: c.textMuted),
                   ),
                 ] else
                   Row(
@@ -199,73 +353,12 @@ class _MissionCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const Spacer(),
-                      Text(
-                        '+${mission.pointsReward} Pkt.',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: ApexColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
                     ],
                   ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TypeBadge extends StatelessWidget {
-  const _TypeBadge({required this.type});
-  final MissionType type;
-
-  Color get _color {
-    switch (type) {
-      case MissionType.daily:
-        return const Color(0xFF64B5F6);
-      case MissionType.weekly:
-        return ApexColors.scoreMid;
-      case MissionType.seasonal:
-        return const Color(0xFF81C784);
-      case MissionType.achievement:
-        return ApexColors.strike;
-    }
-  }
-
-  String get _label {
-    switch (type) {
-      case MissionType.daily:
-        return 'TÄGLICH';
-      case MissionType.weekly:
-        return 'WOCHE';
-      case MissionType.seasonal:
-        return 'SAISON';
-      case MissionType.achievement:
-        return 'ERFOLG';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: _color.withAlpha(30),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: _color.withAlpha(80)),
-      ),
-      child: Text(
-        _label,
-        style: TextStyle(
-          fontSize: 9,
-          color: _color,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.8,
-        ),
       ),
     );
   }

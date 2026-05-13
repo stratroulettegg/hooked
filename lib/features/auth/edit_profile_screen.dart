@@ -13,6 +13,7 @@ import '../../shared/services/firebase/auth_service.dart';
 import '../../shared/services/firebase/user_profile_providers.dart';
 import '../../shared/services/firebase/user_profile_service.dart';
 import '../../shared/utils/permission_dialogs.dart';
+import '../../shared/widgets/permission_pre_prompt.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 
 /// Erlaubt dem User, Anzeigename und Profilbild zu ändern.
@@ -60,6 +61,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Future<void> _pickPhoto() async {
+    final ok = await PermissionPrePrompt.ensure(context, PermissionKind.photos);
+    if (!ok || !mounted) return;
     final picker = ImagePicker();
     try {
       // Profilbilder werden klein angezeigt (Avatar) – stark komprimieren
@@ -88,6 +91,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
     if (_saving) return;
+    final nameErr = validateDisplayName(_nameCtrl.text);
+    if (nameErr != null) {
+      setState(() => _error = nameErr);
+      return;
+    }
+    final steckbriefErr = validateSteckbrief(_steckbriefCtrl.text);
+    if (steckbriefErr != null) {
+      setState(() => _error = steckbriefErr);
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;

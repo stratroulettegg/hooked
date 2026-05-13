@@ -361,7 +361,7 @@ class RevierStats {
     }
 
     // --- comparison ---
-    if (prevCatches > 0 || catches.length > 0) {
+    if (prevCatches > 0 || catches.isNotEmpty) {
       pool.add(
         RevierCard(RevierCardType.comparison, {
           'current': catches.length,

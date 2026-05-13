@@ -10,14 +10,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // True nur für echt angemeldete User — anonyme Auto-Login-Sessions
+    // (siehe FirebaseBootstrap.ensureSignedIn) sollen keine Community-
+    // oder Profil-Inhalte lesen oder schreiben dürfen, weil sie sich
+    // nicht moderieren lassen. Eigene Pro-Cloud-Sync-Daten unter
+    // /users/{uid}/** dürfen sie weiterhin (siehe dort).
+    function isRealUser() {
+      return request.auth != null
+             && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     // Geteilte Trips: nur der Owner darf schreiben/löschen.
     // Eingeladene dürfen lesen (Pull-Refresh), aber nicht editieren.
     // Trip-IDs sind UUIDv4 (122 bit Entropie) — nicht ratbar.
+    // Trip-Sharing ist ein Pro-Feature: nur User mit `pro: true`
+    // (Custom-Claim, gesetzt durch revenuecatWebhook) dürfen einen
+    // sharedTrip neu anlegen. Bestehende Trips bleiben editierbar,
+    // damit Pro→Free-Downgrade-User ihre Daten weiter pflegen können.
     match /sharedTrips/{tripId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow read: if isRealUser();
+      allow create: if isRealUser()
+                    && request.auth.token.pro == true
                     && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if request.auth != null
+      allow update, delete: if isRealUser()
                             && resource.data.ownerUid == request.auth.uid;
 
       // Teilnehmer: jeder Auth-User darf seinen eigenen Eintrag
@@ -25,11 +40,11 @@ service cloud.firestore {
       // man sich selbst — der Trip-Owner darf zusätzlich beliebige
       // Teilnehmer entfernen.
       match /participants/{participantId} {
-        allow read: if request.auth != null;
-        allow create, update: if request.auth != null
+        allow read: if isRealUser();
+        allow create, update: if isRealUser()
                               && participantId == request.auth.uid
                               && request.resource.data.uid == request.auth.uid;
-        allow delete: if request.auth != null
+        allow delete: if isRealUser()
                       && (participantId == request.auth.uid
                           || get(/databases/$(database)/documents/sharedTrips/$(tripId))
                                  .data.ownerUid == request.auth.uid);
@@ -42,19 +57,46 @@ service cloud.firestore {
     // dem Aussteller vorbehalten. Tokens sind 8 Zeichen aus 32er-Alphabet
     // (≈ 1 Billion Kombinationen) — clientseitig nicht enumerierbar.
     match /invites/{token} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow read: if isRealUser();
+      allow create: if isRealUser()
                     && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if request.auth != null
+      allow update: if isRealUser()
                     && resource.data.ownerUid == request.auth.uid;
-      allow delete: if request.auth != null;
+      allow delete: if isRealUser();
+    }
+
+    // Pro-Cloud-Sync (single-user / multi-device).
+    // Speichert pro User die lokal angelegten Daten (catches, spots,
+    // waterbodies, trips, water_days) als gespiegelten Tree, damit sie
+    // auf weiteren Geräten verfügbar sind.
+    //
+    // Owner-only: nur der eingeloggte User darf seinen eigenen Tree
+    // lesen und schreiben. Eine zweite Verteidigungslinie über den
+    // `pro`-Custom-Claim wird ergänzt, sobald der RevenueCat-Webhook
+    // den Claim setzt (siehe docs/MONETIZATION.md PR 4).
+    match /users/{uid} {
+      allow read, write: if request.auth != null && uid == request.auth.uid;
+
+      match /{collection}/{docId} {
+        allow read, write: if request.auth != null
+                           && uid == request.auth.uid
+                           && collection in [
+                             'catches',
+                             'spots',
+                             'waterbodies',
+                             'trips',
+                             'water_days',
+                             'missions',
+                             'meta',
+                           ];
+      }
     }
 
     // Collection-Group-Query auf alle `participants`-Subcollections.
     // Wird beim Multi-Device-Login genutzt, um geteilte Trips wieder-
     // herzustellen, in denen der User Teilnehmer ist.
     match /{path=**}/participants/{participantId} {
-      allow read: if request.auth != null;
+      allow read: if isRealUser();
     }
 
     // Community-Feed: öffentliche Fang-Posts.
@@ -64,23 +106,23 @@ service cloud.firestore {
     // sowie `commentCount` (atomare Inkrement-Schreibvorgänge beim
     // Hinzufügen/Löschen von Kommentaren).
     match /feed/{postId} {
-      allow read: if request.auth != null;
+      allow read: if isRealUser();
       // Posts erfordern ein Foto (photoUrl muss befüllt sein) und
       // eine korrekt gesetzte userId. Auto-hidden-Felder sind beim
       // Anlegen nicht erlaubt – die werden ausschließlich vom
       // Cloud-Function-Code bzw. Admin gesetzt.
-      allow create: if request.auth != null
+      allow create: if isRealUser()
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.photoUrl is string
                     && request.resource.data.photoUrl.size() > 0
                     && !('hidden' in request.resource.data.keys())
                     && !('hiddenReason' in request.resource.data.keys());
-      allow delete: if request.auth != null
+      allow delete: if isRealUser()
                     && resource.data.userId == request.auth.uid;
       // Owner darf seine eigenen Posts updaten, darf aber den
       // hidden-Status nicht selbst zurücknehmen. Andere User dürfen
       // nur Like-/Comment-Counter modifizieren.
-      allow update: if request.auth != null
+      allow update: if isRealUser()
                     && (
                       (
                         resource.data.userId == request.auth.uid
@@ -93,21 +135,21 @@ service cloud.firestore {
                             .hasOnly(['likedBy', 'likeCount', 'commentCount'])
                     );
 
-      // Kommentare: lesen alle Auth-User, anlegen wer sich als Autor
+      // Kommentare: lesen alle echten User, anlegen wer sich als Autor
       // einträgt (Text 1–1000 Zeichen), löschen nur Autor oder
       // Post-Owner.
       match /comments/{commentId} {
-        allow read: if request.auth != null;
-        allow create: if request.auth != null
+        allow read: if isRealUser();
+        allow create: if isRealUser()
                       && request.resource.data.userId == request.auth.uid
                       && request.resource.data.text is string
                       && request.resource.data.text.size() > 0
                       && request.resource.data.text.size() <= 1000;
-        allow update: if request.auth != null
+        allow update: if isRealUser()
                       && resource.data.userId == request.auth.uid
                       && request.resource.data.text is string
                       && request.resource.data.text.size() <= 1000;
-        allow delete: if request.auth != null
+        allow delete: if isRealUser()
                       && (
                         resource.data.userId == request.auth.uid
                         || get(/databases/$(database)/documents/feed/$(postId))
@@ -123,7 +165,7 @@ service cloud.firestore {
     // SDK ausgewertet. Updates/Löschen sind ebenfalls verboten.
     match /reports/{reportId} {
       allow read: if false;
-      allow create: if request.auth != null
+      allow create: if isRealUser()
                     && request.resource.data.reporterUid == request.auth.uid
                     && request.resource.data.targetType in ['post', 'comment', 'user']
                     && request.resource.data.reason is string
@@ -163,36 +205,67 @@ service cloud.firestore {
     // Lesen: jeder Auth-User. Schreiben: nur der Owner. Counter werden
     // nicht gespeichert — Stats werden serverseitig per count()-Aggregation
     // aus den Subcollections berechnet (siehe UserProfileService).
+    //
+    // `handle` und `handleChangedAt` werden ausschließlich von der
+    // Cloud Function `claimHandle` (Admin SDK) gesetzt. Clients dürfen
+    // diese Felder nicht modifizieren — der Diff-Check unten verbietet
+    // jede Änderung dieser Keys über reguläre Client-Writes.
     match /userProfiles/{uid} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null
-                            && uid == request.auth.uid
-                            && request.resource.data.keys().hasOnly([
-                                 'displayName',
-                                 'photoUrl',
-                                 'steckbrief',
-                                 'targetSpecies',
-                                 'updatedAt',
-                                 'createdAt',
-                               ])
-                            && (
-                                 !('steckbrief' in request.resource.data)
-                                 || request.resource.data.steckbrief == null
-                                 || (request.resource.data.steckbrief is string
-                                     && request.resource.data.steckbrief.size() <= 280)
-                               )
-                            && (
-                                 !('targetSpecies' in request.resource.data)
-                                 || (request.resource.data.targetSpecies is list
-                                     && request.resource.data.targetSpecies.size() <= 20)
-                               );
-      allow delete: if request.auth != null && uid == request.auth.uid;
+      allow read: if isRealUser();
+      allow create: if isRealUser()
+                    && uid == request.auth.uid
+                    && request.resource.data.keys().hasOnly([
+                         'displayName',
+                         'photoUrl',
+                         'steckbrief',
+                         'targetSpecies',
+                         'updatedAt',
+                         'createdAt',
+                       ])
+                    && (
+                         !('steckbrief' in request.resource.data)
+                         || request.resource.data.steckbrief == null
+                         || (request.resource.data.steckbrief is string
+                             && request.resource.data.steckbrief.size() <= 280)
+                       )
+                    && (
+                         !('targetSpecies' in request.resource.data)
+                         || (request.resource.data.targetSpecies is list
+                             && request.resource.data.targetSpecies.size() <= 20)
+                       );
+      allow update: if isRealUser()
+                    && uid == request.auth.uid
+                    // Diff darf nur erlaubte Felder berühren — `handle`
+                    // und `handleChangedAt` sind hier bewusst NICHT drin.
+                    && request.resource.data.diff(resource.data)
+                          .affectedKeys()
+                          .hasOnly([
+                            'displayName',
+                            'photoUrl',
+                            'steckbrief',
+                            'targetSpecies',
+                            'updatedAt',
+                            'createdAt',
+                            'pushDisabled',
+                          ])
+                    && (
+                         !('steckbrief' in request.resource.data)
+                         || request.resource.data.steckbrief == null
+                         || (request.resource.data.steckbrief is string
+                             && request.resource.data.steckbrief.size() <= 280)
+                       )
+                    && (
+                         !('targetSpecies' in request.resource.data)
+                         || (request.resource.data.targetSpecies is list
+                             && request.resource.data.targetSpecies.size() <= 20)
+                       );
+      allow delete: if isRealUser() && uid == request.auth.uid;
 
       // Follower-Subcollection: nur der Follower selbst legt seinen
       // Eintrag an oder löscht ihn. Updates sind nicht erlaubt.
       match /followers/{followerId} {
-        allow read: if request.auth != null;
-        allow create, delete: if request.auth != null
+        allow read: if isRealUser();
+        allow create, delete: if isRealUser()
                               && followerId == request.auth.uid;
         allow update: if false;
       }
@@ -200,11 +273,43 @@ service cloud.firestore {
       // Following-Subcollection: Spiegel zur Followers-Liste auf der
       // Owner-Seite. Schreibzugriff nur für den Owner.
       match /following/{followedId} {
-        allow read: if request.auth != null;
-        allow create, delete: if request.auth != null
+        allow read: if isRealUser();
+        allow create, delete: if isRealUser()
                               && uid == request.auth.uid;
         allow update: if false;
       }
+
+      // FCM-Tokens des Users. Nur der Owner darf sie lesen/schreiben.
+      // Pro Gerät ein Doc — Doc-ID = FCM-Token (von Cloud Functions
+      // beim Senden iteriert).
+      match /fcmTokens/{token} {
+        allow read: if request.auth != null && uid == request.auth.uid;
+        allow create, update, delete: if request.auth != null
+                                      && uid == request.auth.uid;
+      }
+
+      // Notification-Inbox. Server (Admin SDK) legt Items an + updated
+      // sie. Client darf nur lesen + als gelesen markieren (`readAt`)
+      // bzw. löschen (eigene Inbox-Items).
+      match /inbox/{notifId} {
+        allow read: if request.auth != null && uid == request.auth.uid;
+        allow create: if false;
+        allow update: if request.auth != null
+                      && uid == request.auth.uid
+                      && request.resource.data.diff(resource.data)
+                            .affectedKeys()
+                            .hasOnly(['readAt']);
+        allow delete: if request.auth != null && uid == request.auth.uid;
+      }
+    }
+
+    // Reverse-Lookup für Handle-Eindeutigkeit. Lesen darf jeder Auth-User
+    // (Live-Verfügbarkeitsprüfung im Setup-Screen). Schreiben ist
+    // ausschließlich der Cloud Function `claimHandle` (Admin SDK)
+    // vorbehalten — atomar gegen Race-Conditions.
+    match /handles/{handle} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }

@@ -16,7 +16,7 @@ abstract class MapTiles {
   static const String dark =
       'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   static const List<String> subdomains = ['a', 'b', 'c', 'd'];
-  static const String userAgent = 'de.apex.hooked';
+  static const String userAgent = 'app.hookedfangtagebuch';
 
   /// Bequemer Helper für Screens: liefert das passende Template je nach
   /// Theme-Modus.
@@ -59,7 +59,7 @@ class TileCacheService {
       BaseOptions(
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 10),
-        headers: const {'User-Agent': 'de.apex.hooked/1.0 (Flutter)'},
+        headers: const {'User-Agent': 'app.hookedfangtagebuch/1.0 (Flutter)'},
       ),
     ),
   );
@@ -83,7 +83,7 @@ class TileCacheService {
       BaseOptions(
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
-        headers: {'User-Agent': 'de.apex.hooked'},
+        headers: {'User-Agent': 'app.hookedfangtagebuch'},
       ),
     )..interceptors.add(DioCacheInterceptor(options: options));
 

@@ -194,6 +194,42 @@ class NotificationService {
     }
   }
 
+  // ─── Social Push (FCM Foreground) ─────────────────────────────────────────
+
+  /// Zeigt eine soziale Push-Benachrichtigung (Like/Kommentar/Follow), die
+  /// vom FCM-Foreground-Handler kommt. Eigener High-Priority-Channel auf
+  /// Android, damit OS-Gruppierung und Sound passen.
+  Future<void> showSocialPush({
+    required String title,
+    required String body,
+    String? threadId,
+    String? payload,
+  }) async {
+    if (!_initialized) await init();
+    if (!_initialized) return;
+    final android = AndroidNotificationDetails(
+      'social',
+      'Soziale Aktivität',
+      channelDescription: 'Likes, Kommentare und neue Follower.',
+      importance: Importance.high,
+      priority: Priority.high,
+      tag: threadId,
+      groupKey: threadId,
+    );
+    final ios = DarwinNotificationDetails(threadIdentifier: threadId);
+    try {
+      await _plugin.show(
+        id: DateTime.now().millisecondsSinceEpoch.remainder(2147483647),
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(android: android, iOS: ios),
+        payload: payload,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('social push show failed: $e');
+    }
+  }
+
   // ─── Public API: Trip-Reminder ────────────────────────────────────────────
 
   /// Eindeutige IDs für die zwei Reminder eines Trips (Vorabend & Morgen).

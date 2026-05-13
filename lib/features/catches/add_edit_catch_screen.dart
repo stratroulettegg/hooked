@@ -118,11 +118,21 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
   }
 
   Future<void> _save() async {
-    FocusScope.of(context).unfocus();
+    // HARTER, synchroner Re-Entrancy-Guard: muss vor allem stehen, sonst
+    // rutschen schnelle Mehrfach-Taps auf langsamen Geräten durch (mehrere
+    // Spots/Catches werden angelegt).
     if (_loading) return;
-    if (!_formKey.currentState!.validate()) return;
+    _loading = true;
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) {
+      _loading = false;
+      if (mounted) setState(() {});
+      return;
+    }
     if (_createNewSpot) {
       if (_newSpotNameCtrl.text.trim().isEmpty) {
+        _loading = false;
+        if (mounted) setState(() {});
         AppToast.error(
           context,
           'Bitte einen Spot-Namen eingeben oder “Kein Spot” wählen',
@@ -130,11 +140,13 @@ class _AddEditCatchScreenState extends ConsumerState<AddEditCatchScreen> {
         return;
       }
       if (_newSpotLat == null || _newSpotLng == null) {
+        _loading = false;
+        if (mounted) setState(() {});
         AppToast.error(context, 'Bitte Spot-Standort auf der Karte markieren');
         return;
       }
     }
-    setState(() => _loading = true);
+    if (mounted) setState(() {}); // Spinner anzeigen
     try {
       String? linkedSpotId = _spotId;
       double? linkedLat;

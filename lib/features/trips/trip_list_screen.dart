@@ -11,7 +11,10 @@ import '../../shared/services/firebase/firebase_bootstrap.dart';
 import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/services/firebase/trip_cloud_share_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
+import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
+import '../pro/pro_gate.dart';
+import '../pro/trip_limit.dart';
 
 class TripListScreen extends ConsumerStatefulWidget {
   const TripListScreen({super.key});
@@ -85,6 +88,15 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
             return CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
+                if (ref.watch(tripLimitReachedProvider))
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _TripLimitBanner(
+                        active: ref.watch(activeTripsCountProvider),
+                      ),
+                    ),
+                  ),
                 if (upcoming.isNotEmpty) ...[
                   SliverPersistentHeader(
                     pinned: true,
@@ -388,39 +400,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = ApexColors.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.event_note, size: 64, color: c.textMuted),
-            const SizedBox(height: 16),
-            Text(
-              'Noch kein Trip geplant',
-              style: TextStyle(
-                fontFamily: 'Rajdhani',
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: c.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Plane deinen nächsten Angel-Ausflug: Gewässer wählen, Spots markieren, Wetter checken.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: c.textSecondary),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add),
-              label: const Text('Trip planen'),
-            ),
-          ],
-        ),
-      ),
+    return EmptyStateView(
+      icon: Icons.event_note_outlined,
+      title: 'Noch kein Trip geplant',
+      description:
+          'Plane deinen nächsten Angel-Ausflug: Gewässer wählen, Spots markieren, Wetter checken.',
+      ctaLabel: 'Trip planen',
+      ctaIcon: Icons.add,
+      onCta: onAdd,
     );
   }
 }
@@ -434,9 +421,10 @@ Future<void> _redeemInviteDialog(BuildContext context, WidgetRef ref) async {
     );
     return;
   }
-  // Cloud-Account ist Pflicht — sonst landet der Beitretende als
-  // „Geist" im Trip (Owner sieht ihn nicht in der Teilnehmer-Liste).
-  if (ref.read(currentUserProvider) == null) {
+  // Cloud-Account ist Pflicht — anonyme Auto-Login-Sessions wandern
+  // sonst als „Geist" in den Trip (Owner sieht weder Name noch Avatar
+  // in der Teilnehmer-Liste, Block/Report greift nicht).
+  if (ref.read(signedInUserProvider) == null) {
     AppToast.error(
       context,
       'Bitte melde dich an, um eine Einladung einzulösen.',
@@ -516,7 +504,7 @@ Future<void> _redeemInviteDialog(BuildContext context, WidgetRef ref) async {
     final trip = await service.redeemInvite(token);
     final added = await ref.read(tripProvider.notifier).addTrip(trip);
     // Eigenen Eintrag in der Teilnehmer-Liste hinterlegen.
-    final user = ref.read(currentUserProvider);
+    final user = ref.read(signedInUserProvider);
     if (user != null && added.cloudTripId != null) {
       try {
         await service.ensureParticipant(
@@ -540,5 +528,75 @@ Future<void> _redeemInviteDialog(BuildContext context, WidgetRef ref) async {
     if (context.mounted) {
       AppToast.error(context, 'Einlösen fehlgeschlagen: $e');
     }
+  }
+}
+
+class _TripLimitBanner extends StatelessWidget {
+  const _TripLimitBanner({required this.active});
+  final int active;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: ApexColors.primary.withAlpha(22),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ApexColors.primary.withAlpha(80)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_open_rounded, color: ApexColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$active / $kFreeTripLimit aktive Trips',
+                  style: TextStyle(
+                    fontFamily: 'Rajdhani',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                    color: c.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Mit Pro planst du unbegrenzt viele Trips parallel.',
+                  style: TextStyle(fontSize: 12, color: c.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => showPaywall(
+              context,
+              feature: ProFeature.unlimitedTrips,
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: ApexColors.primary,
+              foregroundColor: Colors.black,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Pro',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

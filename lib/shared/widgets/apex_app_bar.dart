@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,7 +6,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../services/app_providers.dart';
 import '../services/firebase/auth_providers.dart';
+import '../services/firebase/auth_service.dart';
 import '../services/inbox_providers.dart';
+import 'app_toast.dart';
 
 /// Einheitlicher AppBar für die gesamte App: HOOKED Branding + Menü-Button.
 /// Unterstützt zusätzliche Actions links vom Menü und den standardmäßigen
@@ -86,7 +89,10 @@ class _AvatarButton extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         onTap: () {
           HapticFeedback.selectionClick();
-          context.push(isLoggedIn ? '/profile' : '/auth');
+          // Immer auf den Profil-Screen — der zeigt entweder das eigene
+          // Profil oder den Login-CTA inkl. Einstellungen-Button für
+          // nicht-angemeldete User.
+          context.push('/profile');
         },
         child: Padding(
           padding: const EdgeInsets.all(6),
@@ -311,6 +317,10 @@ class _MenuPanel extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Account-Header — zeigt sofort, "wer bin ich gerade".
+            _AccountHeader(user: user),
+            Divider(height: 1, thickness: 1, color: c.border),
+            // Inbox-Block.
             const SizedBox(height: 6),
             _MenuTile(
               icon: Icons.notifications_none_rounded,
@@ -319,6 +329,10 @@ class _MenuPanel extends ConsumerWidget {
               badge: unread,
               onTap: () => _navigate(context, '/notifications'),
             ),
+            const SizedBox(height: 6),
+            Divider(height: 1, thickness: 1, color: c.border),
+            // Gameification-Block.
+            const SizedBox(height: 6),
             _MenuTile(
               icon: Icons.flag_rounded,
               label: 'Missionen',
@@ -331,6 +345,10 @@ class _MenuPanel extends ConsumerWidget {
               active: route == '/lure-levels',
               onTap: () => _navigate(context, '/lure-levels'),
             ),
+            const SizedBox(height: 6),
+            Divider(height: 1, thickness: 1, color: c.border),
+            // Stats / Tools-Block.
+            const SizedBox(height: 6),
             _MenuTile(
               icon: Icons.menu_book_rounded,
               label: 'Fischlexikon',
@@ -374,10 +392,73 @@ class _MenuPanel extends ConsumerWidget {
                 },
               ),
             ),
+            Divider(height: 1, thickness: 1, color: c.border),
+            const SizedBox(height: 4),
+            _MenuTile(
+              icon: Icons.settings_rounded,
+              label: 'Einstellungen',
+              active: route == '/settings',
+              onTap: () => _navigate(context, '/settings'),
+            ),
+            if (user != null) ...[
+              if (user.isAnonymous) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                  child: _SignInPromo(
+                    onTap: () => _navigate(context, '/auth'),
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 4),
+                _MenuTile(
+                  icon: Icons.logout_rounded,
+                  label: 'Abmelden',
+                  active: false,
+                  onTap: () => _confirmSignOut(context),
+                ),
+              ],
+            ],
+            const SizedBox(height: 6),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Abmelden?'),
+        content: const Text(
+          'Du wirst von Hooked abgemeldet. Deine F\u00e4nge bleiben gespeichert '
+          'und sind nach erneuter Anmeldung wieder verf\u00fcgbar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Abmelden'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    if (!context.mounted) return;
+    // Men\u00fc-Overlay schlie\u00dfen.
+    Navigator.of(context).pop();
+    try {
+      await AuthService.instance.signOut();
+    } catch (e) {
+      if (context.mounted) {
+        AppToast.error(context, 'Abmelden fehlgeschlagen: $e');
+      }
+    }
   }
 
   void _navigate(BuildContext context, String path) {
@@ -436,7 +517,8 @@ class _MenuTile extends StatelessWidget {
             if (badge > 0)
               Container(
                 margin: const EdgeInsets.only(right: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: ApexColors.strike,
                   borderRadius: BorderRadius.circular(10),
@@ -449,7 +531,8 @@ class _MenuTile extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    height: 1.1,
+                    height: 1.0,
+                    leadingDistribution: TextLeadingDistribution.even,
                   ),
                 ),
               ),
@@ -528,6 +611,197 @@ class _ThemeSegments extends StatelessWidget {
           seg(ThemeMode.light, Icons.wb_sunny_rounded, 'Hell'),
           seg(ThemeMode.dark, Icons.nights_stay_rounded, 'Dunkel'),
         ],
+      ),
+    );
+  }
+}
+
+/// Account-Header oben im Burger-Menü — zeigt sofort, _wer_ gerade
+/// eingeloggt ist (oder dass es sich um ein anonymes Geräte-Konto handelt).
+class _AccountHeader extends StatelessWidget {
+  const _AccountHeader({required this.user});
+
+  final User? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    final isAnon = user == null || user!.isAnonymous;
+    final name = isAnon
+        ? 'Anonymes Konto'
+        : (user!.displayName?.trim().isNotEmpty == true
+              ? user!.displayName!.trim()
+              : (user!.email ?? 'Angemeldet'));
+    final sub = isAnon
+        ? 'Geräte-Konto · keine Anmeldung'
+        : (user!.email ?? 'Angemeldet');
+    final photo = user?.photoURL;
+    final initial = isAnon
+        ? '?'
+        : (name.isNotEmpty ? name.characters.first.toUpperCase() : '?');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: ApexColors.primary.withAlpha(28),
+              border: Border.all(color: ApexColors.primary, width: 1.5),
+              image: photo != null
+                  ? DecorationImage(
+                      image: NetworkImage(photo),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: photo == null
+                ? Text(
+                    initial,
+                    style: const TextStyle(
+                      color: ApexColors.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.textMuted,
+                    fontSize: 11,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Conversion-Slot im Burger-Menü für anonyme User: macht aus dem
+/// anonymen "Anmelden"-Tile ein klares Wertversprechen mit primärem CTA.
+class _SignInPromo extends StatelessWidget {
+  const _SignInPromo({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Material(
+      color: ApexColors.primary.withAlpha(18),
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: ApexColors.primary.withAlpha(90),
+              width: 1,
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.groups_rounded,
+                    size: 18,
+                    color: ApexColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Werde Teil der Community',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Posten, kommentieren, folgen — mit eigenem Profil. Kostenlos, EU-Server, jederzeit löschbar.',
+                style: TextStyle(
+                  color: c.textMuted,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: ApexColors.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Anmelden',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.black,
+                          size: 14,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

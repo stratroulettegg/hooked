@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../features/pro/trip_limit.dart';
 
 /// Bottom Sheet, das nach Tap auf den prominenten + Button erscheint.
 /// Nutzer wählt zwischen "Fang erfassen" oder "Spot speichern".
-class QuickAddSheet extends StatelessWidget {
+class QuickAddSheet extends ConsumerWidget {
   const QuickAddSheet({super.key});
 
   static Future<void> show(BuildContext context) {
@@ -18,7 +20,7 @@ class QuickAddSheet extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = ApexColors.of(context);
     return SafeArea(
       child: Container(
@@ -57,6 +59,17 @@ class QuickAddSheet extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _QuickAddTile(
+                icon: Icons.water_rounded,
+                color: Colors.lightBlueAccent,
+                title: 'Gewässer anlegen',
+                subtitle: 'See, Fluss, Kanal …',
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/waterbodies/add');
+                },
+              ),
+              const SizedBox(height: 12),
+              _QuickAddTile(
                 icon: Icons.location_on,
                 color: Colors.tealAccent,
                 title: 'Spot speichern',
@@ -72,8 +85,14 @@ class QuickAddSheet extends StatelessWidget {
                 color: Colors.amberAccent,
                 title: 'Trip erstellen',
                 subtitle: 'Neuen Angeltrip planen',
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
+                  // Free-User: Trip-Limit prüfen → ggf. Paywall.
+                  final ok = await ensureCanAddTrip(
+                    context: context,
+                    ref: ref,
+                  );
+                  if (!ok || !context.mounted) return;
                   context.push('/trips/add');
                 },
               ),

@@ -13,10 +13,12 @@ import '../../shared/services/external_map_launcher.dart';
 import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/services/firebase/firebase_bootstrap.dart';
 import '../../shared/services/firebase/trip_cloud_share_service.dart';
+import '../../shared/services/pro/pro_providers.dart';
 import '../../shared/services/tile_cache_service.dart';
 import '../../shared/services/trip_share_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/daily_forecast_card.dart';
+import '../pro/pro_gate.dart';
 
 class TripDetailScreen extends ConsumerStatefulWidget {
   const TripDetailScreen({super.key, required this.trip});
@@ -162,11 +164,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
               _ParticipantsSection(cloudTripId: trip.cloudTripId!),
               const SizedBox(height: 16),
             ],
-            DailyForecastCard(
-              latitude: trip.centerLat,
-              longitude: trip.centerLng,
-              date: trip.date,
-            ),
+            _ForecastSection(trip: trip),
             const SizedBox(height: 16),
             if (trip.checklist.isNotEmpty) ...[
               const _SectionHeading('PACKLISTE'),
@@ -237,7 +235,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
 
   // ── Share-Flow ─────────────────────────────────────────────────────────
   Future<void> _shareTrip(BuildContext context, Trip trip) async {
-    final user = ref.read(currentUserProvider);
+    // Pro-Gate: Trip-Sharing ist eine Pro-Funktion (Cloud-Einladung).
+    // Free-User dürfen weiterhin den Text-Share nutzen, der weiter unten
+    // als Fallback existiert — den blockieren wir nicht.
+    final isPro = ref.read(isProProvider);
+    if (!isPro) {
+      final unlocked = await showPaywall(
+        context,
+        feature: ProFeature.tripSharing,
+      );
+      if (!unlocked || !context.mounted) return;
+    }
+
+    // Anonyme Auto-Login-Sessions dürfen keine Cloud-Einladungen erstellen
+    // — sie haben kein öffentliches Profil, der Beitretende würde nur eine
+    // anonyme UID sehen. Fallback auf Text-Share wie bei fehlender Anmeldung.
+    final user = ref.read(signedInUserProvider);
 
     // Ohne Firebase/Login: Fallback = alter Text-Share.
     if (!FirebaseBootstrap.isAvailable || user == null) {
@@ -332,6 +345,115 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
         AppToast.error(context, 'Einladung fehlgeschlagen: $e');
       }
     }
+  }
+}
+
+/// Wetter-/Forecast-Sektion im Trip-Detail. Free-User sehen den Forecast
+/// nur für „heute" und „morgen" — alles weiter in der Zukunft ist hinter
+/// dem Pro-Gate (Predator-Forecast).
+class _ForecastSection extends ConsumerWidget {
+  const _ForecastSection({required this.trip});
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ApexColors.of(context);
+    final isPro = ref.watch(isProProvider);
+    final today = DateTime.now();
+    final cutoff = DateTime(today.year, today.month, today.day);
+    final tripDay = DateTime(trip.date.year, trip.date.month, trip.date.day);
+    final daysAhead = tripDay.difference(cutoff).inDays;
+
+    if (isPro || daysAhead <= 1) {
+      return DailyForecastCard(
+        latitude: trip.centerLat,
+        longitude: trip.centerLng,
+        date: trip.date,
+      );
+    }
+
+    // Pro-Gate-Karte
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_view_week_rounded,
+                color: ApexColors.primary,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '7-Tage-Forecast',
+                  style: TextStyle(
+                    fontFamily: 'Rajdhani',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    color: c.textPrimary,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: ApexColors.primary.withAlpha(40),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'PRO',
+                  style: TextStyle(
+                    fontFamily: 'Rajdhani',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
+                    color: ApexColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Wetter, Mondphase und Predator-Score für deinen Trip in '
+            '$daysAhead Tagen — sobald du Pro freischaltest.',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => showPaywall(
+                context,
+                feature: ProFeature.predatorForecast,
+              ),
+              icon: const Icon(Icons.lock_open_rounded, size: 18),
+              label: const Text('Pro freischalten'),
+              style: FilledButton.styleFrom(
+                backgroundColor: ApexColors.primary,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -578,7 +700,15 @@ class _MapSectionState extends State<_MapSection> {
 
     LatLngBounds? bounds;
     if (points.length >= 2) {
-      bounds = LatLngBounds.fromPoints([...points, center]);
+      final candidate = LatLngBounds.fromPoints([...points, center]);
+      // Wenn alle Punkte koinzident sind (z. B. zwei Stops am selben Ort),
+      // hat die Box keine Ausdehnung → flutter_map würde zoom = -∞
+      // berechnen und in der Camera-Assertion crashen. In diesem Fall
+      // verzichten wir auf den Fit und nutzen den `initialZoom`.
+      if (candidate.north != candidate.south &&
+          candidate.east != candidate.west) {
+        bounds = candidate;
+      }
     }
 
     return Container(

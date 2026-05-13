@@ -18,10 +18,14 @@ class NominatimResult {
   final String? type;
 
   factory NominatimResult.fromJson(Map<String, dynamic> json) {
-    final bb = (json['boundingbox'] as List).map((e) => double.parse(e as String)).toList();
+    final bb = (json['boundingbox'] as List)
+        .map((e) => double.parse(e as String))
+        .toList();
     return NominatimResult(
       displayName: json['display_name'] as String,
-      shortName: (json['name'] as String?) ?? (json['display_name'] as String).split(',').first,
+      shortName:
+          (json['name'] as String?) ??
+          (json['display_name'] as String).split(',').first,
       location: LatLng(
         double.parse(json['lat'] as String),
         double.parse(json['lon'] as String),
@@ -35,7 +39,7 @@ class NominatimResult {
 class NominatimService {
   static const _base = 'https://nominatim.openstreetmap.org/search';
   static const _headers = {
-    'User-Agent': 'Hooked/1.0 (de.apex.hooked)',
+    'User-Agent': 'Hooked/1.0 (app.hookedfangtagebuch)',
     'Accept-Language': 'de',
   };
 
@@ -45,9 +49,10 @@ class NominatimService {
     if (query.trim().isEmpty) return [];
     try {
       // Erst spezifisch nach Gewässern suchen
-      final waterResults = await _search(query, extraParams: {
-        'featuretype': 'waterway',
-      });
+      final waterResults = await _search(
+        query,
+        extraParams: {'featuretype': 'waterway'},
+      );
 
       // Dann allgemein (fängt Seen, Weiher, etc.)
       final generalResults = await _search(query);
@@ -64,7 +69,10 @@ class NominatimService {
     }
   }
 
-  Future<List<NominatimResult>> _search(String query, {Map<String, String>? extraParams}) async {
+  Future<List<NominatimResult>> _search(
+    String query, {
+    Map<String, String>? extraParams,
+  }) async {
     final params = <String, String>{
       'q': query,
       'format': 'json',
@@ -75,7 +83,9 @@ class NominatimService {
     };
 
     final uri = Uri.parse(_base).replace(queryParameters: params);
-    final response = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 8));
+    final response = await http
+        .get(uri, headers: _headers)
+        .timeout(const Duration(seconds: 8));
     if (response.statusCode != 200) return [];
 
     final data = json.decode(response.body) as List;

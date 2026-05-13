@@ -15,7 +15,8 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
+    // Anonyme Auto-Login-Sessions sehen den Login-CTA, nicht das Profil.
+    final user = ref.watch(signedInUserProvider);
     if (user != null) {
       return UserProfileScreen(uid: user.uid);
     }

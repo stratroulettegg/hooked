@@ -6,10 +6,15 @@ import 'feed_service.dart';
 import 'user_profile_service.dart';
 
 /// Stream eines beliebigen User-Profils (UID-Family).
+///
+/// Lauscht zusätzlich auf `currentUserProvider`, damit Auth-Wechsel
+/// (Login/Logout) den Stream neu abonnieren — sonst bleibt ein
+/// `permission-denied`-Fehler aus der ausgeloggten Phase im Cache hängen.
 final userProfileProvider = StreamProvider.family<UserProfile?, String>((
   ref,
   uid,
 ) {
+  ref.watch(currentUserProvider);
   return UserProfileService.instance.watchProfile(uid);
 });
 
@@ -42,6 +47,7 @@ final followersOfProvider = StreamProvider.family<Set<String>, String>((
   ref,
   uid,
 ) {
+  ref.watch(currentUserProvider);
   return UserProfileService.instance.watchFollowers(uid);
 });
 
@@ -50,6 +56,7 @@ final followingOfProvider = StreamProvider.family<Set<String>, String>((
   ref,
   uid,
 ) {
+  ref.watch(currentUserProvider);
   return UserProfileService.instance.watchFollowing(uid);
 });
 
@@ -59,10 +66,25 @@ final userFeedPostsProvider = StreamProvider.family<List<FeedPost>, String>((
   ref,
   uid,
 ) {
+  ref.watch(currentUserProvider);
   final blocked =
       ref.watch(blockedUidsProvider).valueOrNull ?? const <String>{};
   if (blocked.contains(uid)) {
     return Stream.value(const <FeedPost>[]);
   }
   return FeedService().watchUserFeed(uid);
+});
+
+/// True, wenn der eingeloggte User das Profil-Setup (Handle + Display-Name)
+/// noch nicht abgeschlossen hat. `null` solange das Profil noch lädt — der
+/// Router behandelt das als „nicht blockieren, abwarten".
+final needsProfileSetupProvider = Provider<bool?>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return false; // Auth-Gate kümmert sich.
+  final profileAsync = ref.watch(myProfileProvider);
+  // Solange noch nicht geladen → noch keine Aussage.
+  if (profileAsync.isLoading && !profileAsync.hasValue) return null;
+  final profile = profileAsync.valueOrNull;
+  if (profile == null) return true; // Doc fehlt → Setup nötig.
+  return !profile.hasCompletedSetup;
 });

@@ -44,11 +44,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       icon: Icons.lock_outline_rounded,
       accent: ApexColors.scoreHigh,
       title: 'Local-First',
-      subtitle: 'Deine Daten gehören dir',
+      subtitle: 'Deine Daten bleiben bei dir',
       body:
-          'Hooked speichert alles direkt auf deinem Gerät. Kein Account nötig, '
-          'keine Cloud-Pflicht, kein Tracking. Du entscheidest, was geteilt '
-          'wird – wirklich alles.',
+          'Alle Fänge, Spots und Trips speichert Hooked direkt auf deinem '
+          'Gerät. Kein Login zum Loslegen, keine Cloud-Pflicht, kein '
+          'Werbe-Tracking. Du entscheidest, was geteilt wird.',
       kind: _PageKind.local,
     ),
     _OnboardingPageData(
@@ -73,14 +73,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       kind: _PageKind.features,
     ),
     _OnboardingPageData(
-      icon: Icons.people_outline_rounded,
+      icon: Icons.people_rounded,
       accent: ApexColors.scoreMid,
-      title: 'Community ist optional',
-      subtitle: 'Anmelden nur wenn du willst',
+      title: 'Werde Teil der Community.',
+      subtitle: 'Mit Account dabei, ohne geht\'s auch',
       body:
-          'Ein Konto brauchst du nur zum Teilen von Trips mit Angelkumpels '
-          'oder zum Posten im Community-Feed. Alles andere funktioniert '
-          'ohne Account – versprochen.',
+          'Teile Fänge im Feed, sieh was andere Angler fangen und '
+          'kommentiere Beiträge. Mit einem kostenlosen Account bist du '
+          'dabei — ohne Account nutzt du Hooked einfach als privates '
+          'Fangtagebuch.',
       kind: _PageKind.account,
     ),
   ];
@@ -264,10 +265,7 @@ class _OrbPainter extends CustomPainter {
     void drawOrb(Offset center, double radius, Color color) {
       final paint = Paint()
         ..shader = RadialGradient(
-          colors: [
-            color.withValues(alpha: 0.30),
-            color.withValues(alpha: 0.0),
-          ],
+          colors: [color.withValues(alpha: 0.30), color.withValues(alpha: 0.0)],
         ).createShader(Rect.fromCircle(center: center, radius: radius))
         ..blendMode = BlendMode.plus;
       canvas.drawCircle(center, radius, paint);
@@ -314,14 +312,14 @@ class _OnboardingPage extends StatelessWidget {
               ),
           const SizedBox(height: 36),
           Text(
-            data.title,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: c.textPrimary,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-            ),
-          )
+                data.title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              )
               .animate(key: ValueKey('title-${data.title}'))
               .fadeIn(delay: 220.ms, duration: 380.ms)
               .slideY(
@@ -333,14 +331,14 @@ class _OnboardingPage extends StatelessWidget {
               ),
           const SizedBox(height: 8),
           Text(
-            data.subtitle,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: data.accent,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-            ),
-          )
+                data.subtitle,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: data.accent,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                ),
+              )
               .animate(key: ValueKey('sub-${data.title}'))
               .fadeIn(delay: 380.ms, duration: 360.ms)
               .slideY(
@@ -352,13 +350,13 @@ class _OnboardingPage extends StatelessWidget {
               ),
           const SizedBox(height: 20),
           Text(
-            data.body,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: c.textSecondary,
-              height: 1.45,
-            ),
-          )
+                data.body,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: c.textSecondary,
+                  height: 1.45,
+                ),
+              )
               .animate(key: ValueKey('body-${data.title}'))
               .fadeIn(delay: 540.ms, duration: 460.ms)
               .slideY(
@@ -371,10 +369,10 @@ class _OnboardingPage extends StatelessWidget {
           if (data.kind == _PageKind.local) ...[
             const SizedBox(height: 22),
             _Badge(
-              icon: Icons.cloud_off_rounded,
-              label: 'Funktioniert komplett offline',
-              accent: data.accent,
-            )
+                  icon: Icons.cloud_off_rounded,
+                  label: 'Kein Community-Zwang',
+                  accent: data.accent,
+                )
                 .animate(key: ValueKey('badge-local-${data.title}'))
                 .fadeIn(delay: 720.ms, duration: 380.ms)
                 .slideY(
@@ -388,10 +386,10 @@ class _OnboardingPage extends StatelessWidget {
           if (data.kind == _PageKind.account) ...[
             const SizedBox(height: 22),
             _Badge(
-              icon: Icons.lock_open_rounded,
-              label: 'Account jederzeit später möglich',
-              accent: data.accent,
-            )
+                  icon: Icons.lock_open_rounded,
+                  label: 'Account jederzeit später möglich',
+                  accent: data.accent,
+                )
                 .animate(key: ValueKey('badge-acc-${data.title}'))
                 .fadeIn(delay: 720.ms, duration: 380.ms)
                 .slideY(
@@ -431,18 +429,18 @@ class _HeroIcon extends StatelessWidget {
         children: [
           // Glow-Pulsring außen
           Container(
-            width: 168,
-            height: 168,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  accent.withValues(alpha: 0.25),
-                  accent.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          )
+                width: 168,
+                height: 168,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      accent.withValues(alpha: 0.25),
+                      accent.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              )
               .animate(onPlay: (c) => c.repeat(reverse: true))
               .scaleXY(
                 begin: 0.92,
@@ -490,9 +488,10 @@ class _OrbitDots extends StatefulWidget {
 
 class _OrbitDotsState extends State<_OrbitDots>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl =
-      AnimationController(vsync: this, duration: const Duration(seconds: 6))
-        ..repeat();
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  )..repeat();
 
   @override
   void dispose() {
@@ -547,17 +546,18 @@ class _ScoreSpark extends StatelessWidget {
     return Positioned(
       top: 8,
       right: 14,
-      child: Icon(
-        Icons.auto_awesome_rounded,
-        size: 20,
-        color: ApexColors.scoreHigh,
-      )
-          .animate(onPlay: (c) => c.repeat())
-          .fadeIn(duration: 500.ms)
-          .then()
-          .scaleXY(begin: 1.0, end: 1.4, duration: 700.ms)
-          .then()
-          .scaleXY(begin: 1.4, end: 1.0, duration: 700.ms),
+      child:
+          Icon(
+                Icons.auto_awesome_rounded,
+                size: 20,
+                color: ApexColors.scoreHigh,
+              )
+              .animate(onPlay: (c) => c.repeat())
+              .fadeIn(duration: 500.ms)
+              .then()
+              .scaleXY(begin: 1.0, end: 1.4, duration: 700.ms)
+              .then()
+              .scaleXY(begin: 1.4, end: 1.0, duration: 700.ms),
     );
   }
 }
@@ -567,12 +567,12 @@ class _ShieldRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 168,
-      height: 168,
-      child: CustomPaint(
-        painter: _DashedRingPainter(color: ApexColors.scoreHigh),
-      ),
-    )
+          width: 168,
+          height: 168,
+          child: CustomPaint(
+            painter: _DashedRingPainter(color: ApexColors.scoreHigh),
+          ),
+        )
         .animate(onPlay: (c) => c.repeat())
         .rotate(duration: 14.seconds, begin: 0, end: 1);
   }
@@ -611,11 +611,7 @@ class _DashedRingPainter extends CustomPainter {
 // ─── Wiederverwendbares Badge ───────────────────────────────────────────────
 
 class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.icon,
-    required this.label,
-    required this.accent,
-  });
+  const _Badge({required this.icon, required this.label, required this.accent});
   final IconData icon;
   final String label;
   final Color accent;
@@ -639,9 +635,9 @@ class _Badge extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: c.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -703,31 +699,31 @@ class _NextAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: FilledButton(
-        onPressed: onNext,
-        style: FilledButton.styleFrom(
-          backgroundColor: accent,
-          foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+          width: double.infinity,
+          height: 54,
+          child: FilledButton(
+            onPressed: onNext,
+            style: FilledButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              textStyle: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Weiter'),
+                SizedBox(width: 8),
+                Icon(Icons.arrow_forward_rounded, size: 20),
+              ],
+            ),
           ),
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-          ),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Weiter'),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward_rounded, size: 20),
-          ],
-        ),
-      ),
-    )
+        )
         .animate(onPlay: (c) => c.repeat(reverse: true))
         .shimmer(
           delay: 1200.ms,
@@ -749,25 +745,25 @@ class _FinalActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: FilledButton.icon(
-            onPressed: onLogin,
-            icon: const Icon(Icons.login_rounded),
-            label: const Text('Anmelden & Trips teilen'),
-            style: FilledButton.styleFrom(
-              backgroundColor: ApexColors.primary,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+              width: double.infinity,
+              height: 54,
+              child: FilledButton.icon(
+                onPressed: onLogin,
+                icon: const Icon(Icons.login_rounded),
+                label: const Text('Anmelden für Community-Features'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: ApexColors.primary,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
               ),
-              textStyle: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        )
+            )
             .animate()
             .fadeIn(duration: 400.ms)
             .slideY(
@@ -778,25 +774,25 @@ class _FinalActions extends StatelessWidget {
             ),
         const SizedBox(height: 10),
         SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: OutlinedButton.icon(
-            onPressed: onSkip,
-            icon: const Icon(Icons.bolt_rounded, size: 18),
-            label: const Text('Direkt loslegen'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: c.textPrimary,
-              side: BorderSide(color: c.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: onSkip,
+                icon: const Icon(Icons.bolt_rounded, size: 18),
+                label: const Text('Direkt loslegen'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.textPrimary,
+                  side: BorderSide(color: c.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
               ),
-              textStyle: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-              ),
-            ),
-          ),
-        )
+            )
             .animate()
             .fadeIn(delay: 120.ms, duration: 400.ms)
             .slideY(

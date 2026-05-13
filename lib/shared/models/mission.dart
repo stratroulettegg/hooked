@@ -94,10 +94,90 @@ class Mission {
 }
 
 class MissionSeed {
+  /// Ende des aktuellen Tages (lokale Zeit, 23:59:59).
+  static DateTime currentDayEnd([DateTime? now]) {
+    final n = now ?? DateTime.now();
+    return DateTime(n.year, n.month, n.day, 23, 59, 59);
+  }
+
+  /// Ende der aktuellen Woche (Sonntag 23:59:59, lokale Zeit, ISO-Wochentage).
+  /// Bei Sonntag selbst → heute 23:59:59 (vorher Bug: 00:00 = bereits abgelaufen).
+  static DateTime currentWeekEnd([DateTime? now]) {
+    final n = now ?? DateTime.now();
+    final daysUntilSunday = (7 - n.weekday) % 7; // Mo=1..So=7 → 6..0
+    final endDay = DateTime(n.year, n.month, n.day).add(
+      Duration(days: daysUntilSunday),
+    );
+    return DateTime(endDay.year, endDay.month, endDay.day, 23, 59, 59);
+  }
+
+  /// Ende des aktuellen Quartals.
+  static DateTime currentSeasonEnd([DateTime? now]) =>
+      _seasonEnd(now ?? DateTime.now());
+
+  // ─── Aktiv-Pool-Auswahl (Daily/Weekly) ─────────────────────────────────
+  // Aus dem großen Mission-Pool werden pro Tag/Woche nur jeweils `n` aktiv
+  // angezeigt. Die Auswahl ist deterministisch über Tag-/Wochen-Index +
+  // ID-Hash, damit alle Geräte (lokal) denselben Vorschlag sehen und sich
+  // die Auswahl beim Tages-/Wochenwechsel automatisch dreht.
+
+  /// Anzahl gleichzeitig aktiver Daily-Missionen.
+  static const int activeDailySlots = 3;
+
+  /// Anzahl gleichzeitig aktiver Weekly-Missionen.
+  static const int activeWeeklySlots = 3;
+
+  static List<String> _idsForType(MissionType type) =>
+      defaultMissions().where((m) => m.type == type).map((m) => m.id).toList();
+
+  static List<String> dailyPoolIds() => _idsForType(MissionType.daily);
+  static List<String> weeklyPoolIds() => _idsForType(MissionType.weekly);
+
+  static int _dayOfYear(DateTime d) =>
+      DateTime(d.year, d.month, d.day).difference(DateTime(d.year)).inDays;
+
+  static int _weekOfYear(DateTime d) {
+    final firstDayOfYear = DateTime(d.year);
+    final daysOffset =
+        DateTime(d.year, d.month, d.day).difference(firstDayOfYear).inDays +
+        firstDayOfYear.weekday -
+        1;
+    return (daysOffset / 7).floor() + 1;
+  }
+
+  static List<String> _deterministicPick(
+    List<String> ids,
+    int seed,
+    int n,
+  ) {
+    final sorted = [...ids]..sort((a, b) {
+      final ah = (a.hashCode ^ seed).toUnsigned(32);
+      final bh = (b.hashCode ^ seed).toUnsigned(32);
+      return ah.compareTo(bh);
+    });
+    return sorted.take(n).toList();
+  }
+
+  /// Liefert die IDs der `activeDailySlots` Daily-Missionen, die heute aktiv
+  /// sein sollen. Stabil über den ganzen Tag.
+  static Set<String> pickActiveDailyIds([DateTime? now]) {
+    final n = now ?? DateTime.now();
+    final seed = n.year * 1000 + _dayOfYear(n);
+    return _deterministicPick(dailyPoolIds(), seed, activeDailySlots).toSet();
+  }
+
+  /// Liefert die IDs der `activeWeeklySlots` Weekly-Missionen, die diese
+  /// Woche aktiv sein sollen. Stabil über die ganze Woche.
+  static Set<String> pickActiveWeeklyIds([DateTime? now]) {
+    final n = now ?? DateTime.now();
+    final seed = n.year * 100 + _weekOfYear(n);
+    return _deterministicPick(weeklyPoolIds(), seed, activeWeeklySlots).toSet();
+  }
+
   static List<Mission> defaultMissions() {
     final now = DateTime.now();
-    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
-    final weekEnd = now.add(Duration(days: 7 - now.weekday));
+    final todayEnd = currentDayEnd(now);
+    final weekEnd = currentWeekEnd(now);
     final seasonEnd = _seasonEnd(now);
 
     return [
@@ -247,9 +327,9 @@ class MissionSeed {
       ),
       Mission(
         id: 'season_zander_hunter',
-        title: 'Zander-Saison',
-        description: '5 Zander in dieser Saison fangen',
-        emoji: '�',
+        title: 'Zander-Quartal',
+        description: '5 Zander in diesem Quartal fangen',
+        emoji: '🐟',
         type: MissionType.seasonal,
         pointsReward: 500,
         status: MissionStatus.active,
@@ -272,7 +352,7 @@ class MissionSeed {
       Mission(
         id: 'season_perch_stack',
         title: 'Barsch-Schwarm',
-        description: '10 Barsche diese Saison',
+        description: '10 Barsche dieses Quartal',
         emoji: '🌟',
         type: MissionType.seasonal,
         pointsReward: 400,
@@ -522,7 +602,7 @@ class MissionSeed {
       Mission(
         id: 'season_wels',
         title: 'Flussmonster',
-        description: 'Einen Wels in dieser Saison fangen',
+        description: 'Einen Wels in diesem Quartal fangen',
         emoji: '🌊',
         type: MissionType.seasonal,
         pointsReward: 600,
@@ -534,7 +614,7 @@ class MissionSeed {
       Mission(
         id: 'season_forelle_trio',
         title: 'Forellen-Trio',
-        description: '3 Forellen in dieser Saison',
+        description: '3 Forellen in diesem Quartal',
         emoji: '❄️',
         type: MissionType.seasonal,
         pointsReward: 450,
@@ -546,7 +626,7 @@ class MissionSeed {
       Mission(
         id: 'season_total_length',
         title: 'Meterware',
-        description: '300 cm Gesamt-Länge dieser Saison',
+        description: '300 cm Gesamt-Länge diesem Quartal',
         emoji: '📐',
         type: MissionType.seasonal,
         pointsReward: 500,
@@ -558,7 +638,7 @@ class MissionSeed {
       Mission(
         id: 'season_deep_spots',
         title: 'Tiefenläufer',
-        description: '5 Fänge aus > 5 m diese Saison',
+        description: '5 Fänge aus > 5 m dieses Quartal',
         emoji: '🌊',
         type: MissionType.seasonal,
         pointsReward: 400,
@@ -570,7 +650,7 @@ class MissionSeed {
       Mission(
         id: 'season_ten_spots',
         title: 'Revier-Kenner',
-        description: 'Fänge an 10 verschiedenen Spots diese Saison',
+        description: 'Fänge an 10 verschiedenen Spots dieses Quartal',
         emoji: '🧭',
         type: MissionType.seasonal,
         pointsReward: 600,
@@ -765,7 +845,7 @@ class MissionSeed {
       Mission(
         id: 'season_all_weekdays',
         title: 'Sieben-Tage-Jäger',
-        description: 'Diese Saison an jedem Wochentag mind. 1 Fang',
+        description: 'Dieses Quartal an jedem Wochentag mind. 1 Fang',
         emoji: '📆',
         type: MissionType.seasonal,
         pointsReward: 700,
@@ -776,8 +856,8 @@ class MissionSeed {
       ),
       Mission(
         id: 'season_fifty_photos',
-        title: 'Fotograf der Saison',
-        description: '50 Fänge mit Foto in dieser Saison',
+        title: 'Fotograf des Quartals',
+        description: '50 Fänge mit Foto in diesem Quartal',
         emoji: '📷',
         type: MissionType.seasonal,
         pointsReward: 700,
@@ -854,6 +934,253 @@ class MissionSeed {
         status: MissionStatus.active,
         progress: 0,
         goal: 10,
+      ),
+
+      // ─── Erstfang je Hauptart ─────────────────────────────────────────────
+      Mission(
+        id: 'ach_first_hecht',
+        title: 'Erster Hecht',
+        description: 'Deinen ersten Hecht fangen',
+        emoji: '🐟',
+        type: MissionType.achievement,
+        pointsReward: 100,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_first_zander',
+        title: 'Erster Zander',
+        description: 'Deinen ersten Zander fangen',
+        emoji: '🐠',
+        type: MissionType.achievement,
+        pointsReward: 100,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_first_barsch',
+        title: 'Erster Barsch',
+        description: 'Deinen ersten Barsch fangen',
+        emoji: '🐡',
+        type: MissionType.achievement,
+        pointsReward: 75,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_first_wels',
+        title: 'Erster Wels',
+        description: 'Deinen ersten Wels fangen',
+        emoji: '🐋',
+        type: MissionType.achievement,
+        pointsReward: 150,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+
+      // ─── Hecht-Größen-Meilensteine ────────────────────────────────────────
+      Mission(
+        id: 'ach_pike_80',
+        title: 'Achtzig-Hecht',
+        description: 'Hecht mit ≥ 80 cm Länge',
+        emoji: '🎣',
+        type: MissionType.achievement,
+        pointsReward: 600,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_pike_100',
+        title: 'Meter-Hecht',
+        description: 'Hecht mit ≥ 100 cm Länge',
+        emoji: '🏆',
+        type: MissionType.achievement,
+        pointsReward: 1000,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_pike_110',
+        title: 'Elfer-Hecht',
+        description: 'Hecht mit ≥ 110 cm Länge',
+        emoji: '👑',
+        type: MissionType.achievement,
+        pointsReward: 1500,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_pike_120',
+        title: 'Zwölf-Zoll-Legende',
+        description: 'Hecht mit ≥ 120 cm Länge',
+        emoji: '🌟',
+        type: MissionType.achievement,
+        pointsReward: 2000,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+
+      // ─── Zander-Größen-Meilensteine ───────────────────────────────────────
+      Mission(
+        id: 'ach_zander_50',
+        title: 'Halbmeterzander',
+        description: 'Zander mit ≥ 50 cm Länge',
+        emoji: '🎯',
+        type: MissionType.achievement,
+        pointsReward: 300,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_zander_60',
+        title: 'Sechziger Zander',
+        description: 'Zander mit ≥ 60 cm Länge',
+        emoji: '⚡',
+        type: MissionType.achievement,
+        pointsReward: 500,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_zander_70',
+        title: 'Siebziger Zander',
+        description: 'Zander mit ≥ 70 cm Länge',
+        emoji: '🏅',
+        type: MissionType.achievement,
+        pointsReward: 800,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_zander_80',
+        title: 'Achtziger Zander',
+        description: 'Zander mit ≥ 80 cm Länge',
+        emoji: '🏆',
+        type: MissionType.achievement,
+        pointsReward: 1200,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+
+      // ─── Barsch-Größen-Meilensteine ───────────────────────────────────────
+      Mission(
+        id: 'ach_perch_30',
+        title: 'Dreißiger Barsch',
+        description: 'Barsch mit ≥ 30 cm Länge',
+        emoji: '🎖️',
+        type: MissionType.achievement,
+        pointsReward: 200,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_perch_40',
+        title: 'Vierziger Barsch',
+        description: 'Barsch mit ≥ 40 cm Länge',
+        emoji: '⚔️',
+        type: MissionType.achievement,
+        pointsReward: 400,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_perch_50',
+        title: 'Fünfziger Barsch',
+        description: 'Barsch mit ≥ 50 cm Länge — echter Koloss',
+        emoji: '👑',
+        type: MissionType.achievement,
+        pointsReward: 700,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+
+      // ─── Wels-Größen-Meilensteine ─────────────────────────────────────────
+      Mission(
+        id: 'ach_wels_150',
+        title: 'Anderthalb-Meter-Wels',
+        description: 'Wels mit ≥ 150 cm Länge',
+        emoji: '🌊',
+        type: MissionType.achievement,
+        pointsReward: 1800,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+      Mission(
+        id: 'ach_wels_200',
+        title: 'Zwei-Meter-Monster',
+        description: 'Wels mit ≥ 200 cm Länge',
+        emoji: '🔱',
+        type: MissionType.achievement,
+        pointsReward: 2500,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+      ),
+
+      // ─── Daily Köder-Typ ──────────────────────────────────────────────────
+      Mission(
+        id: 'daily_rubber_fish',
+        title: 'Gummifisch-Tag',
+        description: 'Fang heute mit einem Gummifisch/Shad/Twister',
+        emoji: '🦑',
+        type: MissionType.daily,
+        pointsReward: 80,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+        expiresAt: todayEnd,
+      ),
+      Mission(
+        id: 'daily_spinner',
+        title: 'Spinner-Tag',
+        description: 'Fang heute mit einem Spinner',
+        emoji: '🌀',
+        type: MissionType.daily,
+        pointsReward: 80,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+        expiresAt: todayEnd,
+      ),
+      Mission(
+        id: 'daily_wobbler',
+        title: 'Wobbler-Tag',
+        description: 'Fang heute mit einem Wobbler/Crankbait',
+        emoji: '🐟',
+        type: MissionType.daily,
+        pointsReward: 80,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+        expiresAt: todayEnd,
+      ),
+      Mission(
+        id: 'daily_blinker',
+        title: 'Blinker-Tag',
+        description: 'Fang heute mit einem Blinker/Löffel/Spoon',
+        emoji: '✨',
+        type: MissionType.daily,
+        pointsReward: 80,
+        status: MissionStatus.active,
+        progress: 0,
+        goal: 1,
+        expiresAt: todayEnd,
       ),
     ];
   }

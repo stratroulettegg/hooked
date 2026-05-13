@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../features/catches/catch_list_screen.dart';
 import '../../features/catches/add_edit_catch_screen.dart';
 import '../../features/catches/catch_detail_screen.dart';
-import '../../features/spots/spot_list_screen.dart';
 import '../../features/spots/add_edit_spot_screen.dart';
 import '../../features/spots/spot_detail_screen.dart';
 import '../../features/trips/trip_list_screen.dart';
@@ -19,42 +18,116 @@ import '../../features/feed/feed_screen.dart';
 import '../../features/water_days/water_days_screen.dart';
 import '../../features/records/records_screen.dart';
 import '../../features/revier/revier_screen.dart';
+import '../../features/waterbodies/waterbodies_screen.dart';
+import '../../features/waterbodies/water_hub_screen.dart';
+import '../../features/waterbodies/add_edit_waterbody_screen.dart';
+import '../../features/waterbodies/waterbody_detail_screen.dart';
 import '../../features/settings/notification_settings_screen.dart';
+import '../../features/settings/community_guidelines_screen.dart';
 import '../../features/settings/blocked_users_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/auth/auth_screen.dart';
 import '../../features/auth/profile_screen.dart';
 import '../../features/auth/edit_profile_screen.dart';
+import '../../features/auth/profile_setup_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/profile/user_profile_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/pro/paywall_screen.dart';
+import '../../features/consent/consent_screen.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
 import '../../shared/models/trip.dart';
+import '../../shared/models/waterbody.dart';
 import '../../shared/services/app_providers.dart';
+import '../../shared/services/consent_service.dart';
+import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/services/firebase/moderation_service.dart';
+import '../../shared/services/firebase/user_profile_providers.dart';
 import '../../shared/services/onboarding_service.dart';
 import '../../shared/widgets/app_quick_add_fab.dart';
 import '../theme/app_theme.dart';
 
-final appRouter = GoRouter(
-  initialLocation: '/catches',
-  redirect: (context, state) {
-    // Beim allerersten Start Onboarding zeigen.
-    final goingToOnboarding = state.matchedLocation == '/onboarding';
-    if (!OnboardingService.hasSeen && !goingToOnboarding) {
-      return '/onboarding';
-    }
-    if (OnboardingService.hasSeen && goingToOnboarding) {
-      return '/catches';
-    }
-    // Alte Home-Route auf Fänge umleiten.
-    if (state.matchedLocation == '/') {
-      return '/catches';
-    }
-    return null;
-  },
-  routes: [
+/// Listenable, das `notifyListeners()` ruft, sobald sich der eingeloggte
+/// User oder das Profil-Setup-Bit ändern — damit der `redirect`-Callback
+/// von go_router neu evaluiert wird.
+class _AuthRouterRefreshNotifier extends ChangeNotifier {
+  _AuthRouterRefreshNotifier(Ref ref) {
+    ref.listen<dynamic>(currentUserProvider, (_, __) => notifyListeners());
+    ref.listen<dynamic>(needsProfileSetupProvider, (_, __) => notifyListeners());
+  }
+}
+
+/// Riverpod-Provider für den App-Router. Wird in `main.dart` via `ref.watch`
+/// in `MaterialApp.router(routerConfig: ...)` injiziert.
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final refresh = _AuthRouterRefreshNotifier(ref);
+  ref.onDispose(refresh.dispose);
+  return GoRouter(
+    initialLocation: '/catches',
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      // Consent-Gate hat absolute Prioät — keine Route außer
+      // `/consent` selbst darf gerendert werden, solange der User noch
+      // nicht in technische Cloud-Verbindungen eingewilligt hat.
+      final goingToConsent = state.matchedLocation == '/consent';
+      if (!ConsentService.techGranted) {
+        // Auf /consent stehen bleiben, ALLE anderen Pfade umleiten.
+        // Wichtig: hier hart returnen, sonst greift weiter unten der
+        // Onboarding-Gate und bounct uns nach /onboarding → /consent.
+        return goingToConsent ? null : '/consent';
+      }
+      if (goingToConsent) {
+        // Consent erteilt, aber wir sind noch auf /consent — weiter zum
+        // Onboarding bzw. direkt in die App.
+        return OnboardingService.hasSeen ? '/catches' : '/onboarding';
+      }
+      final goingToOnboarding = state.matchedLocation == '/onboarding';
+      if (!OnboardingService.hasSeen && !goingToOnboarding) {
+        return '/onboarding';
+      }
+      if (OnboardingService.hasSeen && goingToOnboarding) {
+        return '/catches';
+      }
+      if (state.matchedLocation == '/') {
+        return '/catches';
+      }
+
+      // Profil-Setup-Gate: User ist eingeloggt, aber Handle/DisplayName fehlt.
+      // `null` = Profil lädt noch — nicht umleiten (Flash vermeiden).
+      // Anonyme User (Auto-Login beim App-Start) durchlaufen kein Setup —
+      // sie haben weder Handle noch öffentliches Profil.
+      final user = ref.read(currentUserProvider);
+      if (user != null && !user.isAnonymous) {
+        final needsSetup = ref.read(needsProfileSetupProvider);
+        final atSetup = state.matchedLocation == '/profile-setup';
+        final atAuth = state.matchedLocation == '/auth';
+        // Bereits eingeloggt → Auth-Screen niemals zeigen.
+        // Wenn Setup fehlt, dorthin; sonst zur App.
+        if (atAuth) {
+          return needsSetup == true ? '/profile-setup' : '/catches';
+        }
+        if (needsSetup == true && !atSetup) {
+          return '/profile-setup';
+        }
+        if (needsSetup == false && atSetup) {
+          return '/catches';
+        }
+      } else if (state.matchedLocation == '/profile-setup') {
+        return '/auth';
+      }
+
+      return null;
+    },
+    routes: _buildRoutes(),
+  );
+});
+
+/// Erzeugt jedes Mal eine neue Route-Liste mit einer frischen
+/// StatefulShellRoute-Instanz (und damit neuem GlobalKey).
+/// Darf NICHT als top-level `final` gespeichert werden, da go_router
+/// den Key intern bei der Instanzerzeugung fest verdrahtet.
+List<RouteBase> _buildRoutes() => [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>
           _ScaffoldWithNavBar(navigationShell: navigationShell),
@@ -104,7 +177,11 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/spots',
-              builder: (_, __) => const SpotListScreen(),
+              // Hub mit beiden Tabs (Gewässer + Spots) — erreichbar über
+              // den Hauptnav-Button "Gewässer". Die Sub-Routen /spots/add,
+              // /spots/edit, /spots/detail bleiben unverändert und werden
+              // aus dem Hub heraus gepusht.
+              builder: (_, __) => const WaterHubScreen(),
               routes: [
                 GoRoute(
                   path: 'add',
@@ -179,8 +256,22 @@ final appRouter = GoRouter(
               path: '/feed',
               builder: (_, state) {
                 final extra = state.extra;
-                final postId = extra is String ? extra : null;
-                return FeedScreen(initialPostId: postId);
+                String? postId;
+                bool openComments = false;
+                int requestId = 0;
+                if (extra is String) {
+                  postId = extra;
+                } else if (extra is Map) {
+                  postId = extra['postId'] as String?;
+                  openComments = extra['openComments'] == true;
+                  final r = extra['requestId'];
+                  if (r is int) requestId = r;
+                }
+                return FeedScreen(
+                  initialPostId: postId,
+                  openComments: openComments,
+                  commentsRequestId: requestId,
+                );
               },
             ),
           ],
@@ -194,6 +285,30 @@ final appRouter = GoRouter(
     GoRoute(path: '/water-days', builder: (_, __) => const WaterDaysScreen()),
     GoRoute(path: '/records', builder: (_, __) => const RecordsScreen()),
     GoRoute(path: '/revier', builder: (_, __) => const RevierScreen()),
+    GoRoute(
+      path: '/waterbodies',
+      builder: (_, __) => const WaterbodiesScreen(),
+      routes: [
+        GoRoute(
+          path: 'add',
+          builder: (_, __) => const AddEditWaterbodyScreen(),
+        ),
+        GoRoute(
+          path: 'detail',
+          builder: (context, state) {
+            final wb = state.extra as Waterbody;
+            return WaterbodyDetailScreen(waterbody: wb);
+          },
+        ),
+        GoRoute(
+          path: 'edit',
+          builder: (context, state) {
+            final wb = state.extra as Waterbody;
+            return AddEditWaterbodyScreen(existing: wb);
+          },
+        ),
+      ],
+    ),
     GoRoute(path: '/forecast', builder: (_, __) => const ForecastScreen()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     GoRoute(
@@ -204,12 +319,20 @@ final appRouter = GoRouter(
       path: '/settings/blocked',
       builder: (_, __) => const BlockedUsersScreen(),
     ),
+    GoRoute(
+      path: '/settings/community-guidelines',
+      builder: (_, __) => const CommunityGuidelinesScreen(),
+    ),
     // Auth — außerhalb der Shell
     GoRoute(path: '/auth', builder: (_, __) => const AuthScreen()),
     GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
     GoRoute(
       path: '/profile/edit',
       builder: (_, __) => const EditProfileScreen(),
+    ),
+    GoRoute(
+      path: '/profile-setup',
+      builder: (_, __) => const ProfileSetupScreen(),
     ),
     GoRoute(
       path: '/user/:uid',
@@ -222,8 +345,10 @@ final appRouter = GoRouter(
     ),
     // Onboarding — beim ersten Start
     GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
-  ],
-);
+    GoRoute(path: '/consent', builder: (_, __) => const ConsentScreen()),
+    // Paywall — Pro-Upgrade (Stub bis RevenueCat live ist)
+    GoRoute(path: '/paywall', builder: (_, __) => const PaywallScreen()),
+  ];
 
 class _ScaffoldWithNavBar extends ConsumerStatefulWidget {
   const _ScaffoldWithNavBar({required this.navigationShell});
@@ -342,9 +467,9 @@ class _CenterDockedNavBar extends StatelessWidget {
             onTap: () => onTap(0),
           ),
           _NavItem(
-            icon: Icons.map_outlined,
-            selectedIcon: Icons.map,
-            label: 'Spots',
+            icon: Icons.water_outlined,
+            selectedIcon: Icons.water,
+            label: 'Gewässer',
             selected: currentIndex == 1,
             onTap: () => onTap(1),
           ),

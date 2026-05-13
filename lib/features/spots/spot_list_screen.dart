@@ -9,16 +9,24 @@ import '../../core/format/app_formats.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/catch_entry.dart';
 import '../../shared/models/fishing_spot.dart';
+import '../../shared/models/waterbody.dart';
 import '../../shared/services/app_paths.dart';
 import '../../shared/services/app_providers.dart';
 import '../../shared/widgets/h_scroll_with_hint.dart';
 import '../../shared/services/tile_cache_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
+import '../../shared/widgets/empty_state_view.dart';
+import '../../shared/widgets/mini_map_background.dart';
 import '../../shared/widgets/swipe_to_delete.dart';
 import 'spot_detail_screen.dart' show SpotDetailArgs;
 
 class SpotListScreen extends ConsumerStatefulWidget {
-  const SpotListScreen({super.key});
+  const SpotListScreen({super.key, this.embedded = false});
+
+  /// Wenn `true`, wird der Screen ohne eigenes [Scaffold]/[ApexAppBar]
+  /// als reine Body-Ansicht gerendert. Wird vom [WaterHubScreen] genutzt,
+  /// um Spots als Tab in der Gewässer-Übersicht einzubetten.
+  final bool embedded;
 
   @override
   ConsumerState<SpotListScreen> createState() => _SpotListScreenState();
@@ -43,22 +51,7 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
       if (id != null) catchCount[id] = (catchCount[id] ?? 0) + 1;
     }
 
-    return Scaffold(
-      appBar: ApexAppBar(
-        extraActions: [
-          IconButton(
-            icon: const Icon(Icons.map_outlined),
-            tooltip: 'Karte',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => _SpotsMapScreen(spots: spotsAsync.value ?? []),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: spotsAsync.when(
+    final content = spotsAsync.when(
         loading: () => const Center(
           child: CircularProgressIndicator(color: ApexColors.primary),
         ),
@@ -195,7 +188,31 @@ class _SpotListScreenState extends ConsumerState<SpotListScreen> {
             ],
           );
         },
+      );
+
+    if (widget.embedded) return content;
+    return Scaffold(
+      appBar: ApexAppBar(
+        extraActions: [
+          IconButton(
+            icon: const Icon(Icons.map_outlined),
+            tooltip: 'Karte',
+            onPressed: () {
+              final spots = ref.read(spotProvider).valueOrNull ?? const [];
+              final waterbodies =
+                  ref.read(waterbodyProvider).valueOrNull ?? const [];
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      SpotsMapScreen(spots: spots, waterbodies: waterbodies),
+                ),
+              );
+            },
+          ),
+        ],
       ),
+      body: content,
     );
   }
 
@@ -398,6 +415,40 @@ class _SpotOverviewMapState extends State<_SpotOverviewMap> {
       (24 + (zoom - 10) * 2.5).clamp(16, 40).toDouble();
 
   @override
+  void didUpdateWidget(covariant _SpotOverviewMap old) {
+    super.didUpdateWidget(old);
+    // Wenn sich das Spot-Set geändert hat (Anlage / Löschung),
+    // Kamera neu auf die aktualisierten Punkte legen.
+    if (old.spots.length != widget.spots.length ||
+        !_sameIds(old.spots, widget.spots)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || widget.spots.isEmpty) return;
+        final pts = widget.spots
+            .map((s) => LatLng(s.lat, s.lng))
+            .toList(growable: false);
+        if (pts.length == 1) {
+          _mapController.move(pts.first, _mapController.camera.zoom);
+        } else {
+          _mapController.fitCamera(
+            CameraFit.bounds(
+              bounds: LatLngBounds.fromPoints(pts),
+              padding: const EdgeInsets.all(36),
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  bool _sameIds(List<FishingSpot> a, List<FishingSpot> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+    }
+    return true;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
     final points = widget.spots
@@ -406,10 +457,14 @@ class _SpotOverviewMapState extends State<_SpotOverviewMap> {
 
     final cameraFit = points.length == 1
         ? null
-        : CameraFit.bounds(
-            bounds: LatLngBounds.fromPoints(points),
-            padding: const EdgeInsets.all(36),
-          );
+        : () {
+            final b = LatLngBounds.fromPoints(points);
+            if (b.north == b.south || b.east == b.west) return null;
+            return CameraFit.bounds(
+              bounds: b,
+              padding: const EdgeInsets.all(36),
+            );
+          }();
 
     return Container(
       height: 152,
@@ -573,7 +628,9 @@ class _SpotCard extends ConsumerWidget {
                             cacheWidth: cacheW,
                           );
                         }
-                        return _spotFallbackBackground();
+                        return MiniMapBackground(
+                          markers: [LatLng(spot.lat, spot.lng)],
+                        );
                       },
                     ),
                     // Top-Right: Hotspot-Badge
@@ -619,43 +676,8 @@ class _SpotCard extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    // Top-Left: Hinweis bei fehlendem Foto
-                    if (spot.photoPath == null ||
-                        AppPaths.photoFile(spot.photoPath) == null)
-                      Positioned(
-                        top: 10,
-                        left: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withAlpha(70),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 12,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Kein Foto',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    // Top-Left: Kein „Kein Foto"-Badge mehr — als Fallback
+                    // wird eine Mini-Karte gezeigt.
                   ],
                 ),
               ),
@@ -811,24 +833,6 @@ class _SpotCard extends ConsumerWidget {
       ),
     );
   }
-}
-
-Widget _spotFallbackBackground() {
-  return Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [
-          ApexColors.primary.withAlpha(50),
-          ApexColors.primary.withAlpha(15),
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-    ),
-    child: const Center(
-      child: Icon(Icons.location_on, size: 56, color: Colors.white70),
-    ),
-  );
 }
 
 class _SpotFooterChip extends StatelessWidget {
@@ -1254,59 +1258,41 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = ApexColors.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.map, size: 64, color: c.textMuted),
-            const SizedBox(height: 16),
-            Text(
-              'Noch keine Spots',
-              style: TextStyle(
-                fontFamily: 'Rajdhani',
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: c.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Lege deinen ersten Geheimspot an: Position markieren, Strukturen notieren, später wiederfinden.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: c.textSecondary),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_location_alt),
-              label: const Text('Spot anlegen'),
-            ),
-          ],
-        ),
-      ),
+    return EmptyStateView(
+      icon: Icons.map_outlined,
+      title: 'Noch keine Spots',
+      description:
+          'Lege deinen ersten Geheimspot an: Position markieren, Strukturen notieren, später wiederfinden.',
+      ctaLabel: 'Spot anlegen',
+      ctaIcon: Icons.add_location_alt_outlined,
+      onCta: onAdd,
     );
   }
 }
 
 // ─── Vollbild-Karte aller Spots ───────────────────────────────────────────────
 
-class _SpotsMapScreen extends ConsumerStatefulWidget {
-  const _SpotsMapScreen({required this.spots});
+class SpotsMapScreen extends ConsumerStatefulWidget {
+  const SpotsMapScreen({
+    super.key,
+    required this.spots,
+    this.waterbodies = const [],
+  });
   final List<FishingSpot> spots;
+  final List<Waterbody> waterbodies;
 
   @override
-  ConsumerState<_SpotsMapScreen> createState() => _SpotsMapScreenState();
+  ConsumerState<SpotsMapScreen> createState() => _SpotsMapScreenState();
 }
 
-class _SpotsMapScreenState extends ConsumerState<_SpotsMapScreen> {
+class _SpotsMapScreenState extends ConsumerState<SpotsMapScreen> {
   final _mapController = MapController();
   FishingSpot? _selected;
   HeatmapCell? _selectedCell;
   double _zoom = 10.0;
   bool _showHeatmap = true;
+  bool _showSpots = true;
+  bool _showWaterbodies = true;
   HeatmapFilter _filter = const HeatmapFilter();
 
   static double _markerSize(double zoom) =>
@@ -1335,32 +1321,30 @@ class _SpotsMapScreenState extends ConsumerState<_SpotsMapScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fitAll());
+    // Initial-Fit erfolgt jetzt direkt über `MapOptions.initialCameraFit`
+    // (analog zur funktionierenden Mini-Map `_SpotOverviewMap`). flutter_map 8
+    // löst bei nachgelagertem `fitCamera` keinen Tile-Load aus, bevor der
+    // User die Karte bewegt – deshalb müssen Center/Zoom direkt zum
+    // Erstellungs-Zeitpunkt der Map korrekt sein.
   }
 
   void _fitAll() {
-    if (widget.spots.isEmpty) return;
-    if (widget.spots.length == 1) {
-      _mapController.move(
-        LatLng(widget.spots.first.lat, widget.spots.first.lng),
-        14,
-      );
+    final pts = <LatLng>[
+      for (final s in widget.spots) LatLng(s.lat, s.lng),
+      for (final w in widget.waterbodies)
+        if (w.centerLat != null && w.centerLng != null)
+          LatLng(w.centerLat!, w.centerLng!),
+    ];
+    if (pts.isEmpty) return;
+    if (pts.length == 1) {
+      _mapController.move(pts.first, 14);
       return;
     }
-    final lats = widget.spots.map((s) => s.lat);
-    final lngs = widget.spots.map((s) => s.lng);
-    final bounds = LatLngBounds(
-      LatLng(
-        lats.reduce((a, b) => a < b ? a : b),
-        lngs.reduce((a, b) => a < b ? a : b),
-      ),
-      LatLng(
-        lats.reduce((a, b) => a > b ? a : b),
-        lngs.reduce((a, b) => a > b ? a : b),
-      ),
-    );
     _mapController.fitCamera(
-      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)),
+      CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints(pts),
+        padding: const EdgeInsets.all(60),
+      ),
     );
   }
 
@@ -1386,8 +1370,55 @@ class _SpotsMapScreenState extends ConsumerState<_SpotsMapScreen> {
             options: MapOptions(
               initialCenter: widget.spots.isNotEmpty
                   ? LatLng(widget.spots.first.lat, widget.spots.first.lng)
-                  : const LatLng(48.137154, 11.576124),
-              initialZoom: 10,
+                  : (widget.waterbodies
+                            .where(
+                              (w) =>
+                                  w.centerLat != null && w.centerLng != null,
+                            )
+                            .isNotEmpty
+                        ? LatLng(
+                            widget.waterbodies
+                                .firstWhere(
+                                  (w) =>
+                                      w.centerLat != null &&
+                                      w.centerLng != null,
+                                )
+                                .centerLat!,
+                            widget.waterbodies
+                                .firstWhere(
+                                  (w) =>
+                                      w.centerLat != null &&
+                                      w.centerLng != null,
+                                )
+                                .centerLng!,
+                          )
+                        : const LatLng(48.137154, 11.576124)),
+              initialZoom: (widget.spots.length +
+                          widget.waterbodies
+                              .where(
+                                (w) =>
+                                    w.centerLat != null &&
+                                    w.centerLng != null,
+                              )
+                              .length) ==
+                      1
+                  ? 14
+                  : 10,
+              initialCameraFit: () {
+                final pts = <LatLng>[
+                  for (final s in widget.spots) LatLng(s.lat, s.lng),
+                  for (final w in widget.waterbodies)
+                    if (w.centerLat != null && w.centerLng != null)
+                      LatLng(w.centerLat!, w.centerLng!),
+                ];
+                if (pts.length < 2) return null;
+                final b = LatLngBounds.fromPoints(pts);
+                if (b.north == b.south || b.east == b.west) return null;
+                return CameraFit.bounds(
+                  bounds: b,
+                  padding: const EdgeInsets.all(60),
+                );
+              }(),
               minZoom: 5,
               onTap: (_, __) => setState(() {
                 _selected = null;
@@ -1463,52 +1494,104 @@ class _SpotsMapScreenState extends ConsumerState<_SpotsMapScreen> {
                   }).toList(),
                 ),
 
-              MarkerLayer(
-                markers: widget.spots.map((s) {
-                  final isSelected = _selected?.id == s.id;
-                  final base = _markerSize(_zoom);
-                  final size = isSelected ? base * 1.35 : base;
-                  return Marker(
-                    point: LatLng(s.lat, s.lng),
-                    width: size,
-                    height: size,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selected = s;
-                          _selectedCell = null;
-                        });
-                        _mapController.move(LatLng(s.lat, s.lng), 15);
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? ApexColors.strike
-                              : ApexColors.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: c.background, width: 2.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  (isSelected
-                                          ? ApexColors.strike
-                                          : ApexColors.primary)
-                                      .withAlpha(140),
-                              blurRadius: 10,
+              // Waterbody-Marker (unter den Spot-Pins): rautenförmiges
+              // Symbol mit Typ-Icon, klar abgesetzt von den runden Spot-Pins.
+              if (_showWaterbodies && widget.waterbodies.isNotEmpty)
+                MarkerLayer(
+                  markers: [
+                    for (final w in widget.waterbodies)
+                      if (w.centerLat != null && w.centerLng != null)
+                        Marker(
+                          point: LatLng(w.centerLat!, w.centerLng!),
+                          width: 40,
+                          height: 40,
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push('/waterbodies/detail', extra: w);
+                            },
+                            child: Transform.rotate(
+                              angle: 0.785398, // 45° → Raute
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: c.surface,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: ApexColors.primary,
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: ApexColors.primary.withAlpha(80),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                                child: Transform.rotate(
+                                  angle: -0.785398,
+                                  child: Icon(
+                                    _waterbodyTypeIcon(w.type),
+                                    color: ApexColors.primary,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ],
+                          ),
                         ),
-                        child: Icon(
-                          Icons.location_on,
-                          color: c.background,
-                          size: size * 0.55,
+                  ],
+                ),
+
+              if (_showSpots)
+                MarkerLayer(
+                  markers: widget.spots.map((s) {
+                    final isSelected = _selected?.id == s.id;
+                    final base = _markerSize(_zoom);
+                    final size = isSelected ? base * 1.35 : base;
+                    return Marker(
+                      point: LatLng(s.lat, s.lng),
+                      width: size,
+                      height: size,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selected = s;
+                            _selectedCell = null;
+                          });
+                          _mapController.move(LatLng(s.lat, s.lng), 15);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? ApexColors.strike
+                                : ApexColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: c.background,
+                              width: 2.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    (isSelected
+                                            ? ApexColors.strike
+                                            : ApexColors.primary)
+                                        .withAlpha(140),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.location_on,
+                            color: c.background,
+                            size: size * 0.55,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
+                    );
+                  }).toList(),
+                ),
             ],
           ),
 
@@ -1646,8 +1729,8 @@ class _SpotsMapScreenState extends ConsumerState<_SpotsMapScreen> {
                   foregroundColor: _filter.isActive
                       ? c.background
                       : ApexColors.primary,
-                  onPressed: _showHeatmap ? _openFilterSheet : null,
-                  tooltip: 'Heatmap filtern',
+                  onPressed: _openFilterSheet,
+                  tooltip: 'Filter',
                   child: const Icon(Icons.tune),
                 ),
               ],
@@ -1659,19 +1742,50 @@ class _SpotsMapScreenState extends ConsumerState<_SpotsMapScreen> {
   }
 
   Future<void> _openFilterSheet() async {
-    final result = await showModalBottomSheet<HeatmapFilter>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _HeatmapFilterSheet(initial: _filter),
-    );
+    final result =
+        await showModalBottomSheet<({
+          HeatmapFilter filter,
+          bool showSpots,
+          bool showWaterbodies,
+        })>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => _HeatmapFilterSheet(
+            initial: _filter,
+            initialShowSpots: _showSpots,
+            initialShowWaterbodies: _showWaterbodies,
+            hasWaterbodies: widget.waterbodies.isNotEmpty,
+          ),
+        );
     if (result != null && mounted) {
-      setState(() => _filter = result);
+      setState(() {
+        _filter = result.filter;
+        _showSpots = result.showSpots;
+        _showWaterbodies = result.showWaterbodies;
+      });
     }
   }
 }
 
 // ─── Heatmap-Hilfswidgets ─────────────────────────────────────────────────────
+
+IconData _waterbodyTypeIcon(WaterbodyType t) {
+  switch (t) {
+    case WaterbodyType.see:
+    case WaterbodyType.teich:
+      return Icons.water_rounded;
+    case WaterbodyType.fluss:
+    case WaterbodyType.kanal:
+      return Icons.waves_rounded;
+    case WaterbodyType.hafen:
+      return Icons.directions_boat_rounded;
+    case WaterbodyType.meer:
+      return Icons.sailing_rounded;
+    case WaterbodyType.sonstiges:
+      return Icons.water_drop_outlined;
+  }
+}
 
 class _HeatmapStatsBadge extends StatelessWidget {
   const _HeatmapStatsBadge({required this.heatmap, required this.filter});
@@ -1845,8 +1959,16 @@ class _HeatmapCellCard extends StatelessWidget {
 }
 
 class _HeatmapFilterSheet extends StatefulWidget {
-  const _HeatmapFilterSheet({required this.initial});
+  const _HeatmapFilterSheet({
+    required this.initial,
+    required this.initialShowSpots,
+    required this.initialShowWaterbodies,
+    required this.hasWaterbodies,
+  });
   final HeatmapFilter initial;
+  final bool initialShowSpots;
+  final bool initialShowWaterbodies;
+  final bool hasWaterbodies;
 
   @override
   State<_HeatmapFilterSheet> createState() => _HeatmapFilterSheetState();
@@ -1857,6 +1979,8 @@ class _HeatmapFilterSheetState extends State<_HeatmapFilterSheet> {
   late final Set<Season> _seasons = {...widget.initial.seasons};
   late final Set<DaytimeBucket> _daytimes = {...widget.initial.daytimes};
   late int? _lastDays = widget.initial.lastDays;
+  late bool _showSpots = widget.initialShowSpots;
+  late bool _showWaterbodies = widget.initialShowWaterbodies;
 
   @override
   Widget build(BuildContext context) {
@@ -1904,12 +2028,36 @@ class _HeatmapFilterSheetState extends State<_HeatmapFilterSheet> {
                     _seasons.clear();
                     _daytimes.clear();
                     _lastDays = null;
+                    _showSpots = true;
+                    _showWaterbodies = true;
                   }),
                   child: const Text('Zurücksetzen'),
                 ),
               ],
             ),
             const SizedBox(height: 12),
+            _SectionTitle('Ebenen'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilterChip(
+                  avatar: const Icon(Icons.location_on, size: 18),
+                  label: const Text('Spots'),
+                  selected: _showSpots,
+                  onSelected: (v) => setState(() => _showSpots = v),
+                ),
+                if (widget.hasWaterbodies)
+                  FilterChip(
+                    avatar: const Icon(Icons.water_rounded, size: 18),
+                    label: const Text('Gewässer'),
+                    selected: _showWaterbodies,
+                    onSelected: (v) =>
+                        setState(() => _showWaterbodies = v),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
             _SectionTitle('Fischart'),
             Wrap(
               spacing: 8,
@@ -1995,11 +2143,15 @@ class _HeatmapFilterSheetState extends State<_HeatmapFilterSheet> {
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(
                   context,
-                  HeatmapFilter(
-                    species: _species,
-                    seasons: _seasons,
-                    daytimes: _daytimes,
-                    lastDays: _lastDays,
+                  (
+                    filter: HeatmapFilter(
+                      species: _species,
+                      seasons: _seasons,
+                      daytimes: _daytimes,
+                      lastDays: _lastDays,
+                    ),
+                    showSpots: _showSpots,
+                    showWaterbodies: _showWaterbodies,
                   ),
                 ),
                 child: const Text('Anwenden'),

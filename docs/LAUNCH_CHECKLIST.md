@@ -4,28 +4,37 @@ Stand: 7. Mai 2026 · Version `1.0.0+1` · Bundle-/AppId `de.apex.hooked` · Fir
 
 > Ablauf: Punkte oben nach unten abarbeiten. Reihenfolge ist optimiert: erst Blocker, dann Compliance, dann Polish. Jeder Punkt hat einen klaren Akzeptanz-Test.
 
----
+## 🛑 BUGS – ohne diese Punkte kein Store-Submit
 
+- [x] User meldet auf Samsung A53: "Spot anlegen wenn nicht im WLAN, führt dazu, dass beim speichern der Spot gespecihert wird, es aber rückmeldung kommt. User drückt mehrfach speichern, geht aus Dialog raus, Spot ist aber mehrfach angelegt. (1x pro Klick)"
+- [x] User meldet auf Samsung A53: "Beim versuch ein Kommentar zu schreiben, liegt die Kommentar Eingabemaske unter Navigationsleiste"
+- [x] Genereller Bug: Tägliche/Wöchentliche Quests werden nicht zurückgesetzt (z.B. "Fange 3 Hechte") → Quest-Status bleibt "abgeschlossen" und wird nicht neu zugewiesen 
+- [x] Generell: Notications - Like, Kommentar etc.
+- [x] Missionen: Zander-Saison ohne Bild
+- [ ] Meine Seen: Schonzeiten eintragen etc.
+---
+# Hard Requirements für Store-Submission (iOS + Android):
+- Release-Signing (B1, B2
 ## 🛑 BLOCKER – ohne diese Punkte kein Store-Submit
 
 ### B1. Android Release-Signing einrichten
-- [ ] Production-Keystore erzeugen (außerhalb Repo speichern, Backup!):
+- [x] Production-Keystore erzeugen (außerhalb Repo speichern, Backup!):
   ```bash
   keytool -genkey -v -keystore ~/keys/hooked-release.jks \
     -keyalg RSA -keysize 2048 -validity 10000 -alias hooked
   ```
-- [ ] `android/key.properties` (in `.gitignore`!) anlegen:
+- [x] `android/key.properties` (in `.gitignore`!) anlegen:
   ```
   storePassword=…
   keyPassword=…
   keyAlias=hooked
   storeFile=/Users/ba34344/keys/hooked-release.jks
   ```
-- [ ] `android/.gitignore` enthält `key.properties` (prüfen)
-- [ ] [android/app/build.gradle.kts](android/app/build.gradle.kts) Zeile 32–36 ersetzen:
+- [x] `android/.gitignore` enthält `key.properties` (prüfen)
+- [x] [android/app/build.gradle.kts](android/app/build.gradle.kts) Zeile 32–36 ersetzen:
   - `signingConfigs { create("release") { … } }` mit Keystore aus `key.properties`
   - `buildTypes.release.signingConfig = signingConfigs.getByName("release")`
-- [ ] `flutter build appbundle --release` baut ohne Fehler und nicht mehr mit Debug-Keys
+- [x] `flutter build appbundle --release` baut ohne Fehler und nicht mehr mit Debug-Keys
 - **Akzeptanz**: `jarsigner -verify` zeigt Production-Cert; `bundletool` lässt sich validieren
 
 ### B2. iOS Sign-in-with-Apple Capability final aktivieren
@@ -127,6 +136,20 @@ Datei-Stellen (mind. 17, hier die kritischen):
 
 ## 📦 STORE-SUBMISSION ARTEFAKTE
 
+### S0. Hooked Pro / In-App-Käufe (RevenueCat)
+- [ ] **App-Store-Connect**: 3 Subscriptions / Non-Consumable angelegt (`hooked_pro_monthly` 2,99 €, `hooked_pro_yearly` 24,99 € + 7-Tage-Trial, `hooked_pro_lifetime` 49,99 €), Status _Ready to Submit_
+- [ ] **Play Console**: identische Produkte als Subscription / Managed Product, Status _Active_
+- [ ] **RevenueCat Dashboard**: Apps für iOS + Android verbunden, Public-SDK-Keys notiert
+- [ ] Entitlement `hooked_pro` angelegt, Produkte zugeordnet, im Default-Offering enthalten
+- [ ] **App-Build mit Keys**: `flutter build … --dart-define=REVENUECAT_IOS_KEY=appl_xxx --dart-define=REVENUECAT_ANDROID_KEY=goog_yyy` (sonst Mock-Modus!)
+- [ ] **Webhook-Secret deployen**: `firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET`, dann `firebase deploy --only functions:revenuecatWebhook`
+- [ ] Webhook-URL `https://europe-west3-hooked-fangtagebuch.cloudfunctions.net/revenuecatWebhook` im RC-Dashboard hinterlegen, Authorization-Header `Bearer <secret>`
+- [ ] Sandbox-Test (iOS: TestFlight + Sandbox-Tester) + License-Test (Android: Internal-Testing): Kauf, Restore, Cancel jeweils einmal durchspielen, Custom-Claim `pro: true` per Cloud-Logs validieren
+- [ ] Firestore Rules `firebase deploy --only firestore:rules` (Sharing-Pro-Gate)
+- [ ] Storage Rules `firebase deploy --only storage` (Foto-Upload-Pro-Gate)
+- [ ] App-Store-Connect: Subscription Group + Lokalisierte Beschreibung + Promo-Bild
+- [ ] Play Console: Abo-Beschreibung + Cancel-/Refund-Policy verlinken
+
 ### S1. App Store (iOS)
 - [ ] App Store Connect App-Datensatz angelegt
 - [ ] App-Icon 1024×1024 (PNG, no alpha)
@@ -137,6 +160,7 @@ Datei-Stellen (mind. 17, hier die kritischen):
 - [ ] Privacy-Policy-URL
 - [ ] Altersfreigabe: 12+ vermutlich (User-generated Content via Community)
 - [ ] App Privacy Details: Standort, Fotos, ID, gesammelte Daten korrekt deklarieren
+- [ ] App Privacy Details: Kategorie **Käufe / Purchase History** (RevenueCat App-User-ID + Produkt-ID, *Linked to Identity*, *Used for App Functionality*)
 - [ ] Sign-in-with-Apple-Hinweis: erste Demo-Account-Credentials für Reviewer
 - [ ] Review-Notes mit Test-Account, Hinweis auf Community-Moderation, Account-Delete-Pfad
 
@@ -228,3 +252,5 @@ Datei-Stellen (mind. 17, hier die kritischen):
 8. Store-Artefakte (S1, S2)
 
 **Tag 4** – Internal Testing → Production
+
+# Soft requirements (pre-Launch, aber nicht unbedingt Blocker):

@@ -27,6 +27,13 @@ class FishingSpot {
   final String name;
   final double lat;
   final double lng;
+  /// Optional: ID des verknüpften Gewässers (Waterbody). Wenn gesetzt,
+  /// gilt der Spot als zu diesem Gewässer gehörig. Frei lassen für
+  /// Wildfang-Spots ohne Gewässerverknüpfung.
+  final String? waterbodyId;
+  /// Denormalisierter Anzeige-Name des Gewässers — bleibt aus Backward-
+  /// Compat-Gründen erhalten und wird beim Anlegen automatisch aus dem
+  /// gewählten Gewässer gespiegelt.
   final String? waterBodyName;
   final double? depthM;
   final List<StructureType> structures;
@@ -40,6 +47,7 @@ class FishingSpot {
     required this.name,
     required this.lat,
     required this.lng,
+    this.waterbodyId,
     this.waterBodyName,
     this.depthM,
     this.structures = const [],
@@ -54,6 +62,7 @@ class FishingSpot {
     'name': name,
     'lat': lat,
     'lng': lng,
+    'waterbody_id': waterbodyId,
     'water_body_name': waterBodyName,
     'depth_m': depthM,
     'structures': structures.map((e) => e.name).join(','),
@@ -67,6 +76,7 @@ class FishingSpot {
     name: map['name'] as String,
     lat: map['lat'] as double,
     lng: map['lng'] as double,
+    waterbodyId: map['waterbody_id'] as String?,
     waterBodyName: map['water_body_name'] as String?,
     depthM: map['depth_m'] as double?,
     structures: (map['structures'] as String?)
@@ -85,6 +95,7 @@ class FishingSpot {
     String? name,
     double? lat,
     double? lng,
+    String? waterbodyId,
     String? waterBodyName,
     double? depthM,
     List<StructureType>? structures,
@@ -97,6 +108,7 @@ class FishingSpot {
     name: name ?? this.name,
     lat: lat ?? this.lat,
     lng: lng ?? this.lng,
+    waterbodyId: waterbodyId ?? this.waterbodyId,
     waterBodyName: waterBodyName ?? this.waterBodyName,
     depthM: depthM ?? this.depthM,
     structures: structures ?? this.structures,

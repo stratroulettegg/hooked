@@ -74,8 +74,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Nur nötig, wenn du Trips mit anderen teilen willst. '
-                    'Alles andere funktioniert weiter offline.',
+                    'Melde dich an, um die Community-Features zu nutzen und deine Fänge mit anderen zu teilen.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, color: c.textSecondary),
                   ),

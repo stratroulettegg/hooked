@@ -47,16 +47,46 @@
       <p>Auf dieser Website (statisches Hosting via Firebase Hosting) werden keine Cookies gesetzt und kein Tracking durchgeführt. Es findet keine Profilbildung statt. Beim Aufruf werden vom Hosting-Provider technisch notwendige Server-Logs (IP-Adresse, Zeitstempel, User-Agent) zur Auslieferung und Sicherheit kurzzeitig verarbeitet.</p>
       <p>Innerhalb der mobilen App werden – ausschließlich nach deiner aktiven Anmeldung – Account-Stammdaten (E-Mail, Anzeigename), deine selbst eingegebenen Inhalte (Fänge, Spots, Trips, Notizen, Bilder) sowie optionale Standortdaten verarbeitet, um dir die Funktionalität bereitzustellen. Eine ausführliche In-App-Datenschutzerklärung liegt der Veröffentlichung im App Store und Google Play bei.</p>
 
+      <h3>2.0 Anonyme Geräte-Kennung (Firebase Authentication)</h3>
+      <p>Beim ersten App-Start fragt Hooked dich auf einem eigenen Hinweis-Bildschirm um Einwilligung, eine <strong>anonyme Geräte-Kennung</strong> bei Firebase Authentication anzulegen. Die Einwilligung ist Voraussetzung dafür, dass deine lokal gespeicherten Daten dir eindeutig zugeordnet bleiben (sodass z.&nbsp;B. ein späterer Geräte-Wechsel auf das Pro-Cloud-Sync möglich wird) und dass technische Schutzmechanismen (App Check) die App-Backends vor Missbrauch sichern.</p>
+      <p>Bei diesem Vorgang werden an Google Ireland Ltd. übertragen:</p>
+      <ul>
+        <li>eine zufällig erzeugte UID (kein Bezug zu Name, E-Mail oder Telefonnummer),</li>
+        <li>die IP-Adresse deines Geräts,</li>
+        <li>ein Geräte-Attestation-Token (Apple App Attest bzw. Google Play Integrity), das beweist, dass die Anfrage von einer echten Hooked-App auf einem nicht manipulierten Gerät stammt.</li>
+      </ul>
+      <p>Verarbeitungs-Region: Firebase-Server der EU (eur3, primär Frankfurt/Belgien). Rechtsgrundlage: deine Einwilligung gemäß Art. 6 Abs. 1 lit. a DSGVO bzw. § 25 Abs. 1 TTDSG. Du kannst die Einwilligung jederzeit über <em>Einstellungen → Privatsphäre → „Technische Daten zurücksetzen"</em> widerrufen; beim nächsten Start läuft die App dann wieder rein lokal, bis du erneut zustimmst.</p>
+      <p><strong>Datenminimierung:</strong> Bei der Verbindung übermittelt dein Gerät technisch zwingend deine IP-Adresse an Google. Diese wird von Google ausschließlich kurzzeitig zur Auslieferung der Anfrage und zur Abwehr von Missbrauch (App Check / Anti-Abuse) verarbeitet und nicht für Werbe- oder Analysezwecke ausgewertet. Hooked selbst speichert weder IP-Adressen noch Geräte-Fingerprints. Es werden keine Werbe-IDs (IDFA / Android AdID) gelesen.</p>
+      <p>Solange du nicht zustimmst, werden <strong>keine</strong> Daten an Google übertragen — die App funktioniert vollständig offline und speichert ausschließlich auf deinem Gerät.</p>
+
+      <h3>2.0a Crashlytics + Analytics (Diagnose & Funnel, Opt-in)</h3>
+      <p><strong>Crashlytics</strong> (Firebase) erfasst Absturzberichte (Stack-Trace, Geräte-Modell, OS-Version, Crashlytics-Installations-ID), wenn du in <em>Einstellungen → Privatsphäre → „Hilf, Hooked besser zu machen"</em> zustimmst. Derselbe Schalter aktiviert <strong>Firebase Analytics</strong> für eine eng begrenzte Funnel-Messung: welche Bildschirme du öffnest, ob du einen Fang anlegst, ob ein Kauf-Vorgang startet oder gelingt. Übertragen werden eine pseudonyme App-Instance-ID, das App-Open-Ereignis sowie die Events aus einer fest definierten Allowlist (siehe Quellcode <code>AnalyticsService</code>). <strong>Niemals</strong> übertragen werden Spezies, Gewichte, Längen, GPS-Koordinaten, Spot- oder Trip-Namen, Foto-Inhalte oder Kommentar-Texte.</p>
+      <p>Standardmäßig ist der Schalter <strong>aus</strong>; ohne deine Zustimmung werden weder Crashlytics- noch Analytics-Daten gesendet. Es werden keine Werbe-IDs (IDFA / Android-AdID) gelesen, kein Audience-Sharing mit Google-Werbe-Diensten, keine Cross-App-Profilbildung. Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO bzw. § 25 Abs. 1 TTDSG. Widerruf jederzeit über denselben Schalter.</p>
+
+      <h3>2.0b Geräte-Berechtigungen</h3>
+      <p>Die App fragt erst dann eine Berechtigung an, wenn du die zugehörige Funktion aktiv nutzt. Du kannst jede Berechtigung jederzeit in den System-Einstellungen widerrufen.</p>
+      <ul>
+        <li><strong>Standort</strong> – nur, wenn du einen Fang/Spot mit GPS-Koordinaten speichern möchtest. Die Position wird ausschließlich auf deinem Gerät bzw. in deinem privaten Firestore-Bereich gespeichert und niemals im Community-Feed geteilt.</li>
+        <li><strong>Kamera & Fotos</strong> – nur zum Aufnehmen oder Auswählen eines Fang- oder Profilfotos.</li>
+        <li><strong>Mikrofon</strong> – nur für die Funktion „Per Sprache hinzufügen“ (Voice Quick-Add). Die Aufnahme wird lokal vom Gerät zu Text umgewandelt; es wird keine Audiodatei dauerhaft gespeichert oder an Server übertragen.</li>
+        <li><strong>Mitteilungen</strong> – nur für Erinnerungen an Trips und Reaktionen im Community-Feed. Push-Versand erfolgt über Firebase Cloud Messaging.</li>
+      </ul>
+
       <h3>2.1 Community-Feed (optional, opt-in)</h3>
       <p>Beim Eintragen eines Fangs kannst du den Schalter <em>„In Community-Feed teilen“</em> aktivieren. Nur wenn du das tust, wird der entsprechende Fang-Eintrag mit deinem Anzeigenamen, Profilbild (sofern hinterlegt), Fischart, Gewicht/Länge, Köder und Foto in den für eingeloggte Nutzer sichtbaren Community-Feed übertragen. <strong>Die genaue Position (GPS) und der von dir vergebene Spot-Name werden niemals geteilt.</strong> Optional kannst du zusätzlich den Gewässernamen (z. B. „Donau“, „Bodensee“) freigeben – auch das ist ein separater Schalter und standardmäßig aus.</p>
       <p>Du kannst einen geteilten Fang jederzeit zurückziehen, indem du den Schalter im Eintrag wieder deaktivierst oder den Eintrag löschst – der Beitrag wird dann aus dem Feed entfernt.</p>
 
       <h2>3. Drittanbieter</h2>
       <ul>
-        <li><strong>Firebase Hosting / Firestore / Authentication</strong> (Google Ireland Ltd.) – Bereitstellung der Website und der App-Cloud-Funktionen.</li>
+        <li><strong>Firebase Hosting / Firestore / Authentication / Storage / Cloud Functions / Cloud Messaging / App Check / Crashlytics / Analytics</strong> (Google Ireland Ltd., Gordon House, Barrow Street, Dublin 4, Irland) – Bereitstellung der Website und der App-Cloud-Funktionen.</li>
         <li><strong>Google Sign-In / Sign in with Apple</strong> – Optionale Anmeldeverfahren in der App.</li>
         <li><strong>Google Fonts</strong> – Schriftarten werden vom Google CDN nachgeladen.</li>
+        <li><strong>RevenueCat, Inc.</strong> (1100 Bryant St, Floor 6, San Francisco, CA 94103, USA) – Verarbeitung und Validierung von In-App-Käufen für Hooked&nbsp;Pro. Übertragen werden eine pseudonyme App-User-ID (= deine Hooked-Account-ID), das gekaufte Produkt sowie der Status des Abonnements (aktiv/gekündigt/abgelaufen). Es werden <strong>keine</strong> Zahlungsdaten (Karten-, Bank- oder Kontoinformationen) verarbeitet — diese werden ausschließlich von Apple bzw. Google im jeweiligen Store abgewickelt.</li>
+        <li><strong>Apple Inc.</strong> (One Apple Park Way, Cupertino, CA 95014, USA) bzw. <strong>Google Ireland Ltd.</strong> – Eigenständig Verantwortliche für die Abwicklung des In-App-Kaufs (App Store / Google Play). Die Datenschutzerklärungen der Stores gelten zusätzlich: <a href="https://www.apple.com/legal/privacy/de-ww/" target="_blank" rel="noopener noreferrer">apple.com/legal/privacy</a>, <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">policies.google.com/privacy</a>.</li>
       </ul>
+
+      <h2>3a. Auftragsverarbeitung</h2>
+      <p>Mit Google Ireland Ltd. besteht für sämtliche oben genannten Firebase-Dienste ein Auftragsverarbeitungsvertrag nach Art. 28 DSGVO (Google Cloud Data Processing and Security Terms / Standard-DPA). Mit RevenueCat, Inc. besteht ebenfalls ein Auftragsverarbeitungsvertrag nach Art. 28 DSGVO inkl. EU-Standardvertragsklauseln (SCCs) für die Übermittlung in die USA. Personenbezogene Daten werden ausschließlich auf Grundlage dieser Vereinbarungen und unserer Weisung verarbeitet. Die hier genutzten Firebase-Dienste werden auf EU-Servern (Region eur3) betrieben.</p>
 
       <h2>4. Deine Rechte</h2>
       <p>Du hast jederzeit Anspruch auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit sowie das Recht, der Verarbeitung zu widersprechen. In der App existiert ein integrierter Konto-Lösch-Button, der deinen Account und alle zugehörigen Cloud-Daten entfernt.</p>

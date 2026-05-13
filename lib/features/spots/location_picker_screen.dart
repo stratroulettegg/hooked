@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/services/nominatim_service.dart';
 import '../../shared/services/tile_cache_service.dart';
+import '../../shared/widgets/permission_pre_prompt.dart';
 
 /// Vollbild-Karten-Picker.
 // ignore: unintended_html_in_doc_comment
@@ -21,10 +22,16 @@ class LocationPickerScreen extends StatefulWidget {
     super.key,
     this.initialPosition,
     this.title = 'Standort wählen',
+    this.existingSpots = const [],
   });
 
   final LatLng? initialPosition;
   final String title;
+
+  /// Bereits vorhandene Spots/POIs, die zur Orientierung als gedimmte
+  /// Marker auf der Karte angezeigt werden (z. B. um Doppelanlagen zu
+  /// vermeiden). Die Auswahl selbst bleibt unberührt.
+  final List<LatLng> existingSpots;
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
@@ -62,6 +69,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       if (!await Geolocator.isLocationServiceEnabled()) return;
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
+        if (!mounted) return;
+        final ok = await PermissionPrePrompt.ensure(
+          context,
+          PermissionKind.location,
+        );
+        if (!ok) return;
         perm = await Geolocator.requestPermission();
       }
       if (perm == LocationPermission.denied ||
@@ -184,6 +197,27 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ],
                 alignment: AttributionAlignment.bottomLeft,
               ),
+              if (widget.existingSpots.isNotEmpty)
+                MarkerLayer(
+                  markers: [
+                    for (final p in widget.existingSpots)
+                      Marker(
+                        point: p,
+                        width: 18,
+                        height: 18,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: c.textMuted.withAlpha(140),
+                            border: Border.all(
+                              color: c.background,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               if (_picked != null)
                 MarkerLayer(
                   markers: [

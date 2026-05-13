@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../features/catches/voice/voice_quick_add_sheet.dart';
@@ -19,14 +21,18 @@ class AppQuickAddFab extends StatefulWidget {
 }
 
 class _AppQuickAddFabState extends State<AppQuickAddFab>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _fabSize = 64;
   static const double _satRadius = 96;
   static const double _satSize = 64;
+  static const String _coachPrefKey = 'coachmark_fab_seen_v1';
 
   final GlobalKey _fabKey = GlobalKey();
   late final AnimationController _ctrl;
+  late final AnimationController _pulseCtrl;
   OverlayEntry? _entry;
+  OverlayEntry? _coachEntry;
+  Timer? _coachAutoTimer;
 
   @override
   void initState() {
@@ -36,12 +42,53 @@ class _AppQuickAddFabState extends State<AppQuickAddFab>
       duration: const Duration(milliseconds: 280),
       reverseDuration: const Duration(milliseconds: 200),
     );
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowCoachmark());
+  }
+
+  Future<void> _maybeShowCoachmark() async {
+    if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_coachPrefKey) ?? false) return;
+    if (!mounted) return;
+    final fabCtx = _fabKey.currentContext;
+    if (fabCtx == null) return;
+    final box = fabCtx.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final anchor = box.localToGlobal(
+      Offset(box.size.width / 2, box.size.height / 2),
+    );
+    _coachEntry = OverlayEntry(
+      builder: (_) => _FabCoachmark(
+        anchor: anchor,
+        pulse: _pulseCtrl,
+        onDismiss: _dismissCoachmark,
+      ),
+    );
+    Overlay.of(context, rootOverlay: true).insert(_coachEntry!);
+    _coachAutoTimer = Timer(const Duration(seconds: 8), _dismissCoachmark);
+  }
+
+  Future<void> _dismissCoachmark() async {
+    _coachAutoTimer?.cancel();
+    _coachAutoTimer = null;
+    _coachEntry?.remove();
+    _coachEntry = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_coachPrefKey, true);
   }
 
   @override
   void dispose() {
+    _coachAutoTimer?.cancel();
+    _coachEntry?.remove();
+    _coachEntry = null;
     _entry?.remove();
     _entry = null;
+    _pulseCtrl.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -49,6 +96,17 @@ class _AppQuickAddFabState extends State<AppQuickAddFab>
   bool get _isOpen => _entry != null;
 
   void _toggle() {
+    if (_coachEntry != null) {
+      unawaited(_dismissCoachmark());
+    }
+    // Voice-Quick-Add ist aktuell nur auf iOS verfügbar (Android-Recognizer
+    // ist hersteller-abhängig zu unzuverlässig). Auf Android öffnen wir die
+    // Liste direkt — ohne Satelliten-Menü.
+    if (!Platform.isIOS) {
+      HapticFeedback.lightImpact();
+      QuickAddSheet.show(context);
+      return;
+    }
     if (_isOpen) {
       _close();
     } else {
@@ -251,6 +309,154 @@ class _FabSatellite extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Einmaliger Coachmark, der auf den FAB hinweist.
+/// Pulsierender Ring + Tooltip-Karte oberhalb. Tap irgendwo schließt.
+class _FabCoachmark extends StatelessWidget {
+  const _FabCoachmark({
+    required this.anchor,
+    required this.pulse,
+    required this.onDismiss,
+  });
+
+  final Offset anchor;
+  final Animation<double> pulse;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final c = ApexColors.of(context);
+    const fabRadius = 32.0;
+    const tooltipMaxWidth = 260.0;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onDismiss,
+            child: Container(color: Colors.black.withAlpha(120)),
+          ),
+        ),
+        // Pulsierender Ring um den FAB.
+        AnimatedBuilder(
+          animation: pulse,
+          builder: (_, __) {
+            final t = pulse.value;
+            final ringSize = fabRadius * 2 + 16 + 28 * t;
+            final alpha = ((1 - t) * 180).clamp(0, 180).toInt();
+            return Positioned(
+              left: anchor.dx - ringSize / 2,
+              top: anchor.dy - ringSize / 2,
+              width: ringSize,
+              height: ringSize,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: ApexColors.primary.withAlpha(alpha),
+                      width: 3,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        // Solider Highlight-Ring direkt am FAB.
+        Positioned(
+          left: anchor.dx - (fabRadius + 6),
+          top: anchor.dy - (fabRadius + 6),
+          width: (fabRadius + 6) * 2,
+          height: (fabRadius + 6) * 2,
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: ApexColors.primary,
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Tooltip-Karte oberhalb des FAB.
+        Positioned(
+          left: (anchor.dx - tooltipMaxWidth / 2)
+              .clamp(16.0, media.size.width - tooltipMaxWidth - 16.0),
+          top: anchor.dy - fabRadius - 110,
+          width: tooltipMaxWidth,
+          child: IgnorePointer(
+            ignoring: false,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: ApexColors.primary.withAlpha(120)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(60),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.add_circle_rounded,
+                        color: ApexColors.primary, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Schnell-Eintrag',
+                            style: TextStyle(
+                              fontFamily: 'Rajdhani',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: c.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            Platform.isIOS
+                                ? 'Hier startest du jeden Fang, Spot oder Trip — auch per Sprache.'
+                                : 'Hier startest du jeden Fang, Spot oder Trip.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: c.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                          minWidth: 28, minHeight: 28),
+                      icon: Icon(Icons.close, size: 16, color: c.textMuted),
+                      onPressed: onDismiss,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

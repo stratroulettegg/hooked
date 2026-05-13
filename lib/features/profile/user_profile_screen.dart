@@ -8,8 +8,10 @@ import '../../shared/services/app_providers.dart';
 import '../../shared/services/firebase/auth_providers.dart';
 import '../../shared/services/firebase/user_profile_providers.dart';
 import '../../shared/services/firebase/user_profile_service.dart';
+import '../../shared/services/pro/pro_providers.dart';
 import '../../shared/widgets/apex_app_bar.dart';
 import '../../shared/widgets/app_toast.dart';
+import '../../shared/widgets/moderation_actions.dart';
 import 'profile_posts_grid.dart';
 
 /// Öffentliches Profil. Funktioniert für jeden User — auch für mich
@@ -43,7 +45,14 @@ class UserProfileScreen extends ConsumerWidget {
                   onPressed: () => context.push('/settings'),
                 ),
               ]
-            : const [],
+            : (me == null
+                ? const <Widget>[]
+                : [
+                    _ProfileMoreButton(
+                      targetUid: uid,
+                      isBlocked: isBlocked,
+                    ),
+                  ]),
       ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -118,16 +127,60 @@ class UserProfileScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               Center(
-                child: Text(
-                  displayName,
-                  style: TextStyle(
-                    fontFamily: 'Rajdhani',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: c.textPrimary,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        displayName,
+                        style: TextStyle(
+                          fontFamily: 'Rajdhani',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: c.textPrimary,
+                        ),
+                      ),
+                    ),
+                    if (isMe && ref.watch(isProProvider)) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ApexColors.primary,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'PRO',
+                          style: TextStyle(
+                            fontFamily: 'Rajdhani',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.4,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+              if (profile?.handle != null && profile!.handle!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Center(
+                  child: Text(
+                    '@${profile.handle}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: c.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               // Drei Stats in einer sauber zentrierten Reihe:
               // Beiträge · Follower-Pill · Folgt — gleiche Höhe, gleicher Abstand.
@@ -437,6 +490,85 @@ class _Section extends StatelessWidget {
           ),
           child: child,
         ),
+      ],
+    );
+  }
+}
+
+class _ProfileMoreButton extends ConsumerWidget {
+  const _ProfileMoreButton({required this.targetUid, required this.isBlocked});
+
+  final String targetUid;
+  final bool isBlocked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      tooltip: 'Mehr',
+      icon: const Icon(Icons.more_vert),
+      onSelected: (value) async {
+        switch (value) {
+          case 'report':
+            await showReportSheet(
+              context,
+              ref,
+              kind: ModerationTargetKind.user,
+              targetUid: targetUid,
+            );
+            break;
+          case 'block':
+            await confirmBlockUser(
+              context,
+              ref,
+              targetUid: targetUid,
+            );
+            break;
+          case 'unblock':
+            try {
+              await ref
+                  .read(moderationServiceProvider)
+                  .unblockUser(targetUid);
+              if (context.mounted) {
+                AppToast.success(context, 'Block aufgehoben.');
+              }
+            } catch (e) {
+              if (context.mounted) {
+                AppToast.error(context, 'Aufheben fehlgeschlagen: $e');
+              }
+            }
+            break;
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem<String>(
+          value: 'report',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.flag_outlined, size: 20),
+            title: Text('Profil melden'),
+          ),
+        ),
+        if (isBlocked)
+          const PopupMenuItem<String>(
+            value: 'unblock',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.lock_open_outlined, size: 20),
+              title: Text('Block aufheben'),
+            ),
+          )
+        else
+          const PopupMenuItem<String>(
+            value: 'block',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.block, size: 20),
+              title: Text('Nutzer blockieren'),
+            ),
+          ),
       ],
     );
   }

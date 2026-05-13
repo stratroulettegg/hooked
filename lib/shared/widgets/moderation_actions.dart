@@ -19,15 +19,15 @@ const List<String> kReportReasons = [
 ];
 
 /// Bestimmt das Meldeziel.
-enum ModerationTargetKind { post, comment }
+enum ModerationTargetKind { post, comment, user }
 
-/// Zeigt das untere Sheet zum Melden eines Posts oder Kommentars.
+/// Zeigt das untere Sheet zum Melden eines Posts, Kommentars oder Profils.
 /// Gibt `true` zurück, wenn der Report erfolgreich abgesetzt wurde.
 Future<bool> showReportSheet(
   BuildContext context,
   WidgetRef ref, {
   required ModerationTargetKind kind,
-  required String postId,
+  String? postId,
   String? commentId,
   required String targetUid,
 }) async {
@@ -115,6 +115,58 @@ Future<bool> confirmBlockUser(
   }
 }
 
+/// Bestätigungsdialog zum Löschen eines eigenen Feed-Posts.
+/// Entfernt den Post + Foto online und markiert den lokalen Fang
+/// (falls vorhanden) als nicht mehr geteilt — der Fang selbst bleibt
+/// im Tagebuch erhalten.
+///
+/// Liefert `true`, wenn tatsächlich gelöscht wurde.
+Future<bool> confirmDeleteOwnPost(
+  BuildContext context,
+  WidgetRef ref, {
+  required String postId,
+}) async {
+  final c = ApexColors.of(context);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: c.surface,
+      title: Text('Beitrag löschen?', style: TextStyle(color: c.textPrimary)),
+      content: Text(
+        'Der Beitrag wird aus dem Community-Feed entfernt. Likes und '
+        'Kommentare gehen dabei verloren. Dein Fang bleibt in deinem '
+        'Tagebuch erhalten.',
+        style: TextStyle(color: c.textPrimary),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: ApexColors.strike),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Löschen'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return false;
+  try {
+    await ref.read(feedServiceProvider).unpublish(postId);
+    await ref.read(catchProvider.notifier).markUnshared(postId);
+    if (context.mounted) {
+      AppToast.success(context, 'Beitrag gelöscht.');
+    }
+    return true;
+  } catch (e) {
+    if (context.mounted) {
+      AppToast.error(context, 'Löschen fehlgeschlagen: $e');
+    }
+    return false;
+  }
+}
+
 class _ReportSheet extends ConsumerStatefulWidget {
   const _ReportSheet({
     required this.kind,
@@ -124,7 +176,7 @@ class _ReportSheet extends ConsumerStatefulWidget {
   });
 
   final ModerationTargetKind kind;
-  final String postId;
+  final String? postId;
   final String? commentId;
   final String targetUid;
 
@@ -150,19 +202,28 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
     final fullReason = detail.isEmpty ? _reason! : '${_reason!} — $detail';
     try {
       final svc = ref.read(moderationServiceProvider);
-      if (widget.kind == ModerationTargetKind.post) {
-        await svc.reportPost(
-          postId: widget.postId,
-          targetUid: widget.targetUid,
-          reason: fullReason,
-        );
-      } else {
-        await svc.reportComment(
-          postId: widget.postId,
-          commentId: widget.commentId!,
-          targetUid: widget.targetUid,
-          reason: fullReason,
-        );
+      switch (widget.kind) {
+        case ModerationTargetKind.post:
+          await svc.reportPost(
+            postId: widget.postId!,
+            targetUid: widget.targetUid,
+            reason: fullReason,
+          );
+          break;
+        case ModerationTargetKind.comment:
+          await svc.reportComment(
+            postId: widget.postId!,
+            commentId: widget.commentId!,
+            targetUid: widget.targetUid,
+            reason: fullReason,
+          );
+          break;
+        case ModerationTargetKind.user:
+          await svc.reportUser(
+            targetUid: widget.targetUid,
+            reason: fullReason,
+          );
+          break;
       }
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -224,7 +285,9 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
                           Text(
                             widget.kind == ModerationTargetKind.post
                                 ? 'Beitrag melden'
-                                : 'Kommentar melden',
+                                : widget.kind == ModerationTargetKind.comment
+                                    ? 'Kommentar melden'
+                                    : 'Profil melden',
                             style: TextStyle(
                               fontFamily: 'Rajdhani',
                               fontSize: 18,

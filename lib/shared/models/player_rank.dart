@@ -20,7 +20,7 @@ class PlayerRank {
     PlayerRank(title: 'SCHARFSCHÜTZE', emoji: '🏹', minPoints: 5000),
     PlayerRank(title: 'MEISTER', emoji: '🏆', minPoints: 7500),
     PlayerRank(title: 'GROSSMEISTER', emoji: '🥇', minPoints: 10000),
-    PlayerRank(title: 'RAUBFISCH-KENNER', emoji: '�', minPoints: 15000),
+    PlayerRank(title: 'RAUBFISCH-KENNER', emoji: '🎣', minPoints: 15000),
     PlayerRank(title: 'ELITE-JÄGER', emoji: '⚔️', minPoints: 20000),
     PlayerRank(title: 'PREDATOR', emoji: '🗡️', minPoints: 27500),
     PlayerRank(title: 'APEX PREDATOR', emoji: '👑', minPoints: 35000),

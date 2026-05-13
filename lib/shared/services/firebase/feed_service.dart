@@ -10,6 +10,7 @@ import '../../models/catch_entry.dart';
 import '../../models/fishing_spot.dart';
 import '../../utils/image_compression.dart';
 import '../app_paths.dart';
+import '../moderation/community_words.dart';
 import 'firebase_bootstrap.dart';
 
 /// Repräsentiert einen geteilten Fang im Community-Feed.
@@ -300,6 +301,9 @@ class FeedService {
     if (!FirebaseBootstrap.isAvailable) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+    if (findBannedWord(trimmed) != null) {
+      throw StateError('Dein Kommentar verstößt gegen unsere Community-Regeln.');
+    }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 

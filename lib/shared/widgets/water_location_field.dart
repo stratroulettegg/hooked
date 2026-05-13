@@ -46,6 +46,7 @@ class WaterLocationField extends StatelessWidget {
     this.onClear,
     this.icon,
     this.placeholderIcon,
+    this.existingSpots = const [],
   });
 
   /// Anzeigetext – z. B. „Chiemsee" oder „Aktueller Standort".
@@ -84,6 +85,10 @@ class WaterLocationField extends StatelessWidget {
   /// Icon links wenn `hasLocation == false`.
   final IconData? placeholderIcon;
 
+  /// Bereits vorhandene Spots, die im Karten-Picker als gedimmte Marker
+  /// angezeigt werden (Doppelanlage vermeiden, Kontext zum Gewässer).
+  final List<LatLng> existingSpots;
+
   Future<void> _openSearch(BuildContext context) async {
     final picked = await showWaterSearchSheet(
       context,
@@ -107,7 +112,11 @@ class WaterLocationField extends StatelessWidget {
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) =>
-            LocationPickerScreen(initialPosition: mapInitial, title: mapTitle),
+            LocationPickerScreen(
+              initialPosition: mapInitial,
+              title: mapTitle,
+              existingSpots: existingSpots,
+            ),
       ),
     );
     if (res == null) return;

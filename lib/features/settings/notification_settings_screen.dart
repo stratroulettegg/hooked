@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +10,13 @@ import '../../shared/services/notifications/notification_categories.dart';
 import '../../shared/services/notifications/notification_prefs.dart';
 import '../../shared/services/notifications/notification_service.dart';
 import '../../shared/widgets/apex_app_bar.dart';
+import '../../shared/widgets/permission_pre_prompt.dart';
+
+/// Projekt nutzt eine named Firestore-Datenbank `default`.
+FirebaseFirestore get _firestore => FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: 'default',
+    );
 
 /// Einstellungen für lokale Push-Benachrichtigungen.
 ///
@@ -24,11 +34,60 @@ class _NotificationSettingsScreenState
     extends ConsumerState<NotificationSettingsScreen> {
   bool _permissionGranted = false;
   bool _checkingPermission = true;
+  bool _socialPushEnabled = true;
+  bool _socialPushLoading = true;
 
   @override
   void initState() {
     super.initState();
     _refresh();
+    _loadSocialPush();
+  }
+
+  Future<void> _loadSocialPush() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      if (!mounted) return;
+      setState(() => _socialPushLoading = false);
+      return;
+    }
+    try {
+      final snap = await _firestore
+          .collection('userProfiles')
+          .doc(uid)
+          .get();
+      final disabled = snap.data()?['pushDisabled'] == true;
+      if (!mounted) return;
+      setState(() {
+        _socialPushEnabled = !disabled;
+        _socialPushLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _socialPushLoading = false);
+    }
+  }
+
+  Future<void> _setSocialPush(bool value) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    setState(() => _socialPushEnabled = value);
+    HapticFeedback.selectionClick();
+    try {
+      await _firestore
+          .collection('userProfiles')
+          .doc(uid)
+          .set(
+            {
+              'pushDisabled': !value,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _socialPushEnabled = !value);
+    }
   }
 
   Future<void> _refresh() async {
@@ -41,6 +100,11 @@ class _NotificationSettingsScreenState
   }
 
   Future<void> _requestPermission() async {
+    final ok0 = await PermissionPrePrompt.ensure(
+      context,
+      PermissionKind.notifications,
+    );
+    if (!ok0 || !mounted) return;
     setState(() => _checkingPermission = true);
     final ok = await NotificationService.instance.requestPermission();
     if (!mounted) return;
@@ -77,6 +141,12 @@ class _NotificationSettingsScreenState
               if (!mounted) return;
               setState(() {});
             },
+          ),
+          const SizedBox(height: 20),
+          _SocialPushCard(
+            enabled: _socialPushEnabled,
+            disabled: !_permissionGranted || _socialPushLoading,
+            onChanged: _setSocialPush,
           ),
           const SizedBox(height: 20),
           AnimatedOpacity(
@@ -540,6 +610,74 @@ class _TimeButton extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SocialPushCard extends StatelessWidget {
+  const _SocialPushCard({
+    required this.enabled,
+    required this.disabled,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final bool disabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ApexColors.of(context);
+    return Opacity(
+      opacity: disabled ? 0.5 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: enabled ? ApexColors.primary.withAlpha(140) : c.border,
+            width: 1,
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        child: Row(
+          children: [
+            Icon(
+              Icons.favorite_outline,
+              color: ApexColors.primary,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Likes, Kommentare & Follower',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: c.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    enabled
+                        ? 'Aktiv — Push-Benachrichtigungen für soziale Aktivitäten.'
+                        : 'Aus — Aktivitäten erscheinen nur in der Inbox.',
+                    style: TextStyle(fontSize: 12, color: c.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: enabled,
+              onChanged: disabled ? null : onChanged,
+              activeThumbColor: ApexColors.primary,
+            ),
+          ],
         ),
       ),
     );

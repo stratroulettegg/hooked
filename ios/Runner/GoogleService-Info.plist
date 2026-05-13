@@ -3,9 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>162244151198-ku0iu6f6p9je5l0s9eb7m2k08vdt5esp.apps.googleusercontent.com</string>
+	<string>162244151198-j0pe484lih5loql4ecev7rcth1e2ov2t.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.162244151198-ku0iu6f6p9je5l0s9eb7m2k08vdt5esp</string>
+	<string>com.googleusercontent.apps.162244151198-j0pe484lih5loql4ecev7rcth1e2ov2t</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>162244151198-02qd0nfgpv35qf0k5ecof8siurp4lqgi.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyAdlvZ7_sQht4NKD9wsJR7uwcLByCluH3o</string>
 	<key>GCM_SENDER_ID</key>
@@ -13,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>de.apex.hooked</string>
+	<string>app.hookedfangtagebuch</string>
 	<key>PROJECT_ID</key>
 	<string>hooked-fangtagebuch</string>
 	<key>STORAGE_BUCKET</key>
@@ -29,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:162244151198:ios:8462d1a7a47ed21445f88f</string>
+	<string>1:162244151198:ios:0375eab2c8d53bb645f88f</string>
 </dict>
 </plist>

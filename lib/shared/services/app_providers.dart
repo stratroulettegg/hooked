@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 import '../models/catch_entry.dart';
 import '../models/fishing_spot.dart';
+import '../models/waterbody.dart';
 import '../models/mission.dart';
 import '../models/trip.dart';
 import '../../core/engines/predator_score_engine.dart';
@@ -78,6 +79,14 @@ final currentWeatherProvider = FutureProvider<WeatherData?>((ref) async {
   final lng = position?.longitude ?? 11.576124;
   return WeatherService().fetchCurrent(lat, lng);
 });
+
+// ─── Forecast DateTime Picker (Datum + Uhrzeit für Predator Index) ───────────
+/// Gewählter Zeitpunkt für den Forecast-Screen. Default = jetzt.
+/// Wird zurückgesetzt, wenn der User die Seite verlässt oder die Location
+/// ändert, damit der Nutzer immer den aktuellen Stand sieht beim Öffnen.
+final selectedForecastDateTimeProvider = StateProvider<DateTime>(
+  (ref) => DateTime.now(),
+);
 
 // ─── Predator Score Provider (geteilt zwischen Home + Forecast) ───────────────
 /// Einzige Score-Berechnung für die gesamte App — verhindert Abweichungen.
@@ -208,6 +217,27 @@ class CatchNotifier extends AsyncNotifier<List<CatchEntry>> {
     }
   }
 
+  /// Markiert einen lokalen Fang als „nicht (mehr) im Feed geteilt", ohne
+  /// ihn zu löschen. Wird genutzt, wenn der zugehörige Online-Post separat
+  /// entfernt wurde (z. B. via Feed-Detail-Screen) — der Fang selbst soll
+  /// im lokalen Tagebuch erhalten bleiben.
+  ///
+  /// No-op, wenn lokal kein Fang mit der ID existiert (typischer Fall nach
+  /// App-Re-Install: der Online-Post lebt weiter, lokal ist nichts da).
+  Future<void> markUnshared(String id) async {
+    final list = state.valueOrNull ?? const <CatchEntry>[];
+    final idx = list.indexWhere((c) => c.id == id);
+    if (idx < 0) return;
+    final entry = list[idx];
+    if (!entry.isShared) return;
+    final updated = entry.copyWith(isShared: false);
+    await _db.updateCatch(updated);
+    state = AsyncData([
+      for (final c in list)
+        if (c.id == id) updated else c,
+    ]);
+  }
+
   Future<void> _publishToFeed(CatchEntry entry) async {
     FishingSpot? spot;
     if (entry.shareWater && entry.spotId != null) {
@@ -261,6 +291,46 @@ class SpotNotifier extends AsyncNotifier<List<FishingSpot>> {
 final spotProvider = AsyncNotifierProvider<SpotNotifier, List<FishingSpot>>(
   SpotNotifier.new,
 );
+
+// ─── Waterbody Provider ───────────────────────────────────────────────────────
+
+class WaterbodyNotifier extends AsyncNotifier<List<Waterbody>> {
+  @override
+  Future<List<Waterbody>> build() => _db.getWaterbodies();
+
+  Future<Waterbody> addWaterbody(Waterbody wb) async {
+    final newWb = wb.id.isEmpty ? wb.copyWith(id: _uuid.v4()) : wb;
+    await _db.insertWaterbody(newWb);
+    final list = [newWb, ...?state.valueOrNull];
+    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    state = AsyncData(list);
+    return newWb;
+  }
+
+  Future<void> editWaterbody(Waterbody wb) async {
+    await _db.updateWaterbody(wb);
+    final list = [
+      for (final w in state.valueOrNull ?? <Waterbody>[])
+        if (w.id == wb.id) wb else w,
+    ];
+    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    state = AsyncData(list);
+  }
+
+  Future<void> removeWaterbody(String id) async {
+    await _db.deleteWaterbody(id);
+    state = AsyncData(
+      (state.valueOrNull ?? <Waterbody>[]).where((w) => w.id != id).toList(),
+    );
+    // Spots werden in der DB auf null gesetzt — Spot-Cache neu laden
+    ref.invalidate(spotProvider);
+  }
+}
+
+final waterbodyProvider =
+    AsyncNotifierProvider<WaterbodyNotifier, List<Waterbody>>(
+      WaterbodyNotifier.new,
+    );
 
 // ─── Trip Provider ────────────────────────────────────────────────────────────
 
@@ -514,13 +584,133 @@ class MissionNotifier extends AsyncNotifier<List<Mission>> {
   @override
   Future<List<Mission>> build() async {
     await _db.seedMissions();
-    return _db.getMissions();
+    final missions = await _db.getMissions();
+    final processed = await _rolloverIfNeeded(missions);
+    return _filterAndSort(processed);
+  }
+
+  /// Liefert nur die für die UI sichtbaren Missionen, sortiert „gut zuerst":
+  /// 1. Bereits begonnene aktive Missionen (höchster %-Fortschritt zuerst)
+  /// 2. Frische aktive Missionen
+  /// 3. Abgeschlossene
+  /// Innerhalb gleicher Stufe Reihenfolge: Daily → Weekly → Saisonal → Achievement.
+  List<Mission> _filterAndSort(List<Mission> missions) {
+    final activeDaily = MissionSeed.pickActiveDailyIds();
+    final activeWeekly = MissionSeed.pickActiveWeeklyIds();
+    final visible = missions.where((m) {
+      switch (m.type) {
+        case MissionType.daily:
+          return activeDaily.contains(m.id);
+        case MissionType.weekly:
+          return activeWeekly.contains(m.id);
+        case MissionType.seasonal:
+        case MissionType.achievement:
+          return true;
+      }
+    }).toList();
+
+    int typeRank(MissionType t) => switch (t) {
+      MissionType.daily => 0,
+      MissionType.weekly => 1,
+      MissionType.seasonal => 2,
+      MissionType.achievement => 3,
+    };
+
+    int statusRank(Mission m) {
+      if (m.isCompleted) return 2;
+      if (m.progress > 0) return 0; // angefangen → ganz nach oben
+      return 1;
+    }
+
+    visible.sort((a, b) {
+      final s = statusRank(a).compareTo(statusRank(b));
+      if (s != 0) return s;
+      final t = typeRank(a.type).compareTo(typeRank(b.type));
+      if (t != 0) return t;
+      // Innerhalb: höherer Fortschritt zuerst (näher am Ziel = sichtbarer)
+      final p = b.progressPercent.compareTo(a.progressPercent);
+      if (p != 0) return p;
+      return a.title.compareTo(b.title);
+    });
+    return visible;
+  }
+
+  /// Setzt abgelaufene Daily-/Weekly-/Saisonal-Missionen zurück und vergibt
+  /// neue `expiresAt`. Achievement-Missionen bleiben unberührt.
+  /// Daily/Weekly-Missionen, die im Pool nicht aktiv ausgewählt sind, werden
+  /// ebenfalls in einen sauberen Ausgangszustand zurückgesetzt — so haben
+  /// sie keinen alten Fortschritt, wenn sie an einem späteren Tag wieder
+  /// vom Pool gezogen werden.
+  /// Wird bei jedem `build()` und vor jedem `updateProgress` aufgerufen, damit
+  /// sich Quests auch dann zurücksetzen, wenn die App über Mitternacht oder
+  /// einen Wochenwechsel offen geblieben ist.
+  Future<List<Mission>> _rolloverIfNeeded(List<Mission> missions) async {
+    final now = DateTime.now();
+    final todayEnd = MissionSeed.currentDayEnd(now);
+    final weekEnd = MissionSeed.currentWeekEnd(now);
+    final seasonEnd = MissionSeed.currentSeasonEnd(now);
+    final activeDaily = MissionSeed.pickActiveDailyIds(now);
+    final activeWeekly = MissionSeed.pickActiveWeeklyIds(now);
+    final result = <Mission>[];
+    for (final m in missions) {
+      DateTime? newExpires;
+      bool isInActiveSlot;
+      switch (m.type) {
+        case MissionType.daily:
+          newExpires = todayEnd;
+          isInActiveSlot = activeDaily.contains(m.id);
+          break;
+        case MissionType.weekly:
+          newExpires = weekEnd;
+          isInActiveSlot = activeWeekly.contains(m.id);
+          break;
+        case MissionType.seasonal:
+          newExpires = seasonEnd;
+          isInActiveSlot = true;
+          break;
+        case MissionType.achievement:
+          result.add(m);
+          continue;
+      }
+      final expired = m.expiresAt == null || now.isAfter(m.expiresAt!);
+      // Inaktive Slot-Missionen mit altem Fortschritt zurücksetzen, damit
+      // sie beim nächsten Auftauchen sauber bei 0 starten.
+      final needsCleanReset =
+          !isInActiveSlot && (m.progress > 0 || m.isCompleted);
+      if (expired || needsCleanReset) {
+        final reset = Mission(
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          emoji: m.emoji,
+          type: m.type,
+          pointsReward: m.pointsReward,
+          status: MissionStatus.active,
+          progress: 0,
+          goal: m.goal,
+          completedAt: null,
+          expiresAt: newExpires,
+        );
+        await _db.updateMission(reset);
+        result.add(reset);
+      } else {
+        result.add(m);
+      }
+    }
+    return result;
   }
 
   Future<void> updateProgress(String missionId, int newProgress) async {
-    final missions = state.valueOrNull ?? [];
+    // Erst Rollover, damit ein neuer Tag/eine neue Woche eine zuvor
+    // abgeschlossene Mission wieder „active" macht und der Fortschritt
+    // sauber neu gezählt wird.
+    final fromDb = await _db.getMissions();
+    final processed = await _rolloverIfNeeded(fromDb);
+    final missions = _filterAndSort(processed);
+    state = AsyncData(missions);
+
     final idx = missions.indexWhere((m) => m.id == missionId);
-    if (idx == -1) return;
+    if (idx == -1) return; // ID ist heute/diese Woche nicht im aktiven Pool
 
     final mission = missions[idx];
     if (mission.isCompleted) return;
@@ -533,10 +723,11 @@ class MissionNotifier extends AsyncNotifier<List<Mission>> {
       completedAt: newProgress >= mission.goal ? DateTime.now() : null,
     );
     await _db.updateMission(updated);
-    state = AsyncData([
+    final next = [
       for (int i = 0; i < missions.length; i++)
         if (i == idx) updated else missions[i],
-    ]);
+    ];
+    state = AsyncData(_filterAndSort(next));
   }
 }
 
@@ -1018,6 +1209,155 @@ class _MissionService {
           }
           final maxAtSpot = counts.values.fold<int>(0, (a, b) => a > b ? a : b);
           await notifier.updateProgress(m.id, maxAtSpot);
+
+        // ─── Erstfang je Hauptart ────────────────────────────────────────
+        case 'ach_first_hecht':
+          if (catches.any((c) => c.species == FishSpecies.hecht)) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_first_zander':
+          if (catches.any((c) => c.species == FishSpecies.zander)) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_first_barsch':
+          if (catches.any((c) => c.species == FishSpecies.barsch)) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_first_wels':
+          if (catches.any((c) => c.species == FishSpecies.wels)) {
+            await notifier.updateProgress(m.id, 1);
+          }
+
+        // ─── Hecht-Größen-Meilensteine ────────────────────────────────────
+        case 'ach_pike_80':
+          if (catches.any(
+            (c) => c.species == FishSpecies.hecht && (c.lengthCm ?? 0) >= 80,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_pike_100':
+          if (catches.any(
+            (c) => c.species == FishSpecies.hecht && (c.lengthCm ?? 0) >= 100,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_pike_110':
+          if (catches.any(
+            (c) => c.species == FishSpecies.hecht && (c.lengthCm ?? 0) >= 110,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_pike_120':
+          if (catches.any(
+            (c) => c.species == FishSpecies.hecht && (c.lengthCm ?? 0) >= 120,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+
+        // ─── Zander-Größen-Meilensteine ──────────────────────────────────
+        case 'ach_zander_50':
+          if (catches.any(
+            (c) => c.species == FishSpecies.zander && (c.lengthCm ?? 0) >= 50,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_zander_60':
+          if (catches.any(
+            (c) => c.species == FishSpecies.zander && (c.lengthCm ?? 0) >= 60,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_zander_70':
+          if (catches.any(
+            (c) => c.species == FishSpecies.zander && (c.lengthCm ?? 0) >= 70,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_zander_80':
+          if (catches.any(
+            (c) => c.species == FishSpecies.zander && (c.lengthCm ?? 0) >= 80,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+
+        // ─── Barsch-Größen-Meilensteine ───────────────────────────────────
+        case 'ach_perch_30':
+          if (catches.any(
+            (c) => c.species == FishSpecies.barsch && (c.lengthCm ?? 0) >= 30,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_perch_40':
+          if (catches.any(
+            (c) => c.species == FishSpecies.barsch && (c.lengthCm ?? 0) >= 40,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_perch_50':
+          if (catches.any(
+            (c) => c.species == FishSpecies.barsch && (c.lengthCm ?? 0) >= 50,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+
+        // ─── Wels-Größen-Meilensteine ────────────────────────────────────
+        case 'ach_wels_150':
+          if (catches.any(
+            (c) => c.species == FishSpecies.wels && (c.lengthCm ?? 0) >= 150,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'ach_wels_200':
+          if (catches.any(
+            (c) => c.species == FishSpecies.wels && (c.lengthCm ?? 0) >= 200,
+          )) {
+            await notifier.updateProgress(m.id, 1);
+          }
+
+        // ─── Daily Köder-Typ ─────────────────────────────────────────────
+        case 'daily_rubber_fish':
+          if (_isToday(entry.caughtAt) &&
+              _lureMatches(entry.lure, [
+                'gummi',
+                'shad',
+                'twister',
+                'slug',
+                'grub',
+              ])) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'daily_spinner':
+          if (_isToday(entry.caughtAt) &&
+              _lureMatches(entry.lure, [
+                'spinner',
+                'mepps',
+                'blue fox',
+                'rooster',
+              ])) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'daily_wobbler':
+          if (_isToday(entry.caughtAt) &&
+              _lureMatches(entry.lure, [
+                'wobbler',
+                'crankbait',
+                'rapala',
+                'plug',
+                'minnow',
+              ])) {
+            await notifier.updateProgress(m.id, 1);
+          }
+        case 'daily_blinker':
+          if (_isToday(entry.caughtAt) &&
+              _lureMatches(entry.lure, [
+                'blinker',
+                'löffel',
+                'spoon',
+                'abu',
+                'toby',
+              ])) {
+            await notifier.updateProgress(m.id, 1);
+          }
       }
     }
   }
@@ -1055,21 +1395,22 @@ class _MissionService {
     return dt.isAfter(_seasonStart(now)) && dt.isBefore(_seasonEnd(now));
   }
 
+  /// Prüft ob [lure] (Freitext) einen der [keywords] enthält (case-insensitive).
+  bool _lureMatches(String? lure, List<String> keywords) {
+    if (lure == null || lure.trim().isEmpty) return false;
+    final lower = lure.toLowerCase();
+    return keywords.any((k) => lower.contains(k));
+  }
+
+  // Quartal: Q1=Jan–Mär, Q2=Apr–Jun, Q3=Jul–Sep, Q4=Okt–Dez
   DateTime _seasonStart(DateTime now) {
-    final m = now.month;
-    if (m >= 3 && m <= 5) return DateTime(now.year, 3, 1);
-    if (m >= 6 && m <= 8) return DateTime(now.year, 6, 1);
-    if (m >= 9 && m <= 11) return DateTime(now.year, 9, 1);
-    final y = m == 12 ? now.year : now.year - 1;
-    return DateTime(y, 12, 1);
+    final q = ((now.month - 1) ~/ 3) * 3 + 1; // erster Monat des Quartals
+    return DateTime(now.year, q, 1);
   }
 
   DateTime _seasonEnd(DateTime now) {
-    final m = now.month;
-    if (m >= 3 && m <= 5) return DateTime(now.year, 5, 31, 23, 59, 59);
-    if (m >= 6 && m <= 8) return DateTime(now.year, 8, 31, 23, 59, 59);
-    if (m >= 9 && m <= 11) return DateTime(now.year, 11, 30, 23, 59, 59);
-    final y = m == 12 ? now.year + 1 : now.year;
-    return DateTime(y, 2, 28, 23, 59, 59);
+    final q = ((now.month - 1) ~/ 3) * 3 + 3; // letzter Monat des Quartals
+    final lastDay = DateUtils.getDaysInMonth(now.year, q);
+    return DateTime(now.year, q, lastDay, 23, 59, 59);
   }
 }

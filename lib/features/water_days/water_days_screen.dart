@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/format/app_formats.dart';
 import '../../core/theme/app_theme.dart';
@@ -99,13 +100,39 @@ class WaterDaysScreen extends ConsumerWidget {
           // Liste der Tage
           if (days.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40),
+              padding: const EdgeInsets.symmetric(vertical: 32),
               child: Center(
-                child: Text(
-                  'Noch keine Tage am Wasser markiert.\n'
-                  'Tippe auf das Plus oder erfasse einen Fang.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: c.textSecondary),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.calendar_month_outlined,
+                        size: 56, color: c.textMuted),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Noch keine Tage am Wasser',
+                      style: TextStyle(
+                        fontFamily: 'Rajdhani',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: c.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'Jeder Fang zählt automatisch als Tag am Wasser. Plus-Tage kannst du hier zusätzlich markieren.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: c.textSecondary, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: () => context.push('/catches/add'),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Fang eintragen'),
+                    ),
+                  ],
                 ),
               ),
             )

@@ -221,10 +221,19 @@ class _AddEditTripScreenState extends ConsumerState<AddEditTripScreen> {
   }
 
   Future<void> _save() async {
-    FocusScope.of(context).unfocus();
+    // HARTER, synchroner Re-Entrancy-Guard: muss vor allem stehen, sonst
+    // rutschen schnelle Mehrfach-Taps auf langsamen Geräten durch.
     if (_loading) return;
-    if (!_formKey.currentState!.validate()) return;
+    _loading = true;
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) {
+      _loading = false;
+      if (mounted) setState(() {});
+      return;
+    }
     if (_date == null) {
+      _loading = false;
+      if (mounted) setState(() {});
       _snack('Bitte ein Datum wählen');
       return;
     }
@@ -236,10 +245,12 @@ class _AddEditTripScreenState extends ConsumerState<AddEditTripScreen> {
       lng = _stops.first.lng;
     }
     if (lat == null || lng == null) {
+      _loading = false;
+      if (mounted) setState(() {});
       _snack('Bitte ein Gewässer oder mindestens einen Spot setzen');
       return;
     }
-    setState(() => _loading = true);
+    if (mounted) setState(() {}); // Spinner anzeigen
     try {
       final existing = widget.existing;
       final trip = Trip(

@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -51,7 +48,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCG4SOU4yyAUjH4DxYWblcTvxpv9lmn6yU',
-    appId: '1:162244151198:android:533264b45d3baf3245f88f',
+    appId: '1:162244151198:android:ab09926c5691c12d45f88f',
     messagingSenderId: '162244151198',
     projectId: 'hooked-fangtagebuch',
     storageBucket: 'hooked-fangtagebuch.firebasestorage.app',
@@ -63,8 +60,18 @@ class DefaultFirebaseOptions {
     messagingSenderId: '162244151198',
     projectId: 'hooked-fangtagebuch',
     storageBucket: 'hooked-fangtagebuch.firebasestorage.app',
+    androidClientId: '162244151198-02qd0nfgpv35qf0k5ecof8siurp4lqgi.apps.googleusercontent.com',
     iosClientId: '162244151198-ku0iu6f6p9je5l0s9eb7m2k08vdt5esp.apps.googleusercontent.com',
-    iosBundleId: 'de.apex.hooked',
+    iosBundleId: 'app.hookedfangtagebuch',
+  );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDcBos9W8UY1YJ82ogejEHVGFZPkEy7dSM',
+    appId: '1:162244151198:web:47096256271b8cee45f88f',
+    messagingSenderId: '162244151198',
+    projectId: 'hooked-fangtagebuch',
+    authDomain: 'hooked-fangtagebuch.firebaseapp.com',
+    storageBucket: 'hooked-fangtagebuch.firebasestorage.app',
   );
 
 }

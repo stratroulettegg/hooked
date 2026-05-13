@@ -34,6 +34,26 @@ service firebase.storage {
                     && userId == request.auth.uid;
     }
 
+    // Privat-Sync-Fotos für Pro-User: /userPhotos/<uid>/<filename>
+    // Spiegelt den lokalen `<docs>/photos`-Ordner in die Cloud, damit
+    // Catches/Spots/Waterbodies geräteübergreifend mit Bildern verfügbar
+    // sind. Strikt owner-only, plus Pro-Claim-Pflicht beim Write
+    // (gesetzt durch den `revenuecatWebhook`).
+    match /userPhotos/{userId}/{fileName} {
+      allow read: if request.auth != null
+                  && userId == request.auth.uid;
+      allow write: if request.auth != null
+                   && userId == request.auth.uid
+                   && request.auth.token.pro == true
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType in [
+                        'image/jpeg', 'image/jpg',
+                        'image/png', 'image/webp', 'image/heic'
+                      ];
+      allow delete: if request.auth != null
+                    && userId == request.auth.uid;
+    }
+
     // Default-Deny: alles, was nicht oben gematcht hat, ist verboten.
     // Auch wenn die Standard-Regel von Firebase Storage 'deny' ist,
     // machen wir es hier explizit sichtbar.
