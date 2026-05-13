@@ -335,11 +335,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 }),
                 const SizedBox(height: 24),
                 // CTA-Button mit Glow
-                _GlowCta(
-                  busy: _busy,
-                  selected: _selected,
-                  onPressed: _purchase,
-                )
+                _GlowCta(busy: _busy, selected: _selected, onPressed: _purchase)
                     .animate()
                     .fadeIn(delay: 560.ms, duration: 400.ms)
                     .slideY(
@@ -360,9 +356,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   ),
                 ).animate().fadeIn(delay: 680.ms, duration: 360.ms),
                 const SizedBox(height: 4),
-                _LegalFooter(onOpen: _openLink)
-                    .animate()
-                    .fadeIn(delay: 740.ms, duration: 360.ms),
+                _LegalFooter(
+                  onOpen: _openLink,
+                ).animate().fadeIn(delay: 740.ms, duration: 360.ms),
               ],
             ),
           ),
@@ -434,10 +430,7 @@ class _OrbPainter extends CustomPainter {
     void drawOrb(Offset center, double radius, Color color) {
       final paint = Paint()
         ..shader = RadialGradient(
-          colors: [
-            color.withValues(alpha: 0.28),
-            color.withValues(alpha: 0.0),
-          ],
+          colors: [color.withValues(alpha: 0.28), color.withValues(alpha: 0.0)],
         ).createShader(Rect.fromCircle(center: center, radius: radius))
         ..blendMode = BlendMode.plus;
       canvas.drawCircle(center, radius, paint);
@@ -539,23 +532,23 @@ class _PaywallHeroState extends State<_PaywallHero>
         const SizedBox(height: 20),
         // "HOOKED PRO" Pill
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: accent.withValues(alpha: 0.45)),
-          ),
-          child: const Text(
-            'HOOKED PRO',
-            style: TextStyle(
-              fontFamily: 'Rajdhani',
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2.4,
-              color: ApexColors.primary,
-            ),
-          ),
-        )
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: accent.withValues(alpha: 0.45)),
+              ),
+              child: const Text(
+                'HOOKED PRO',
+                style: TextStyle(
+                  fontFamily: 'Rajdhani',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.4,
+                  color: ApexColors.primary,
+                ),
+              ),
+            )
             .animate(onPlay: (c) => c.repeat(period: 3.seconds))
             .shimmer(duration: 1600.ms, color: accent.withValues(alpha: 0.5)),
         const SizedBox(height: 14),
@@ -576,11 +569,7 @@ class _PaywallHeroState extends State<_PaywallHero>
           Text(
             f.description,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: c.textSecondary,
-              height: 1.4,
-            ),
+            style: TextStyle(fontSize: 14, color: c.textSecondary, height: 1.4),
           ),
         ] else ...[
           Text(
@@ -681,62 +670,62 @@ class _GlowCta extends StatelessWidget {
   final VoidCallback onPressed;
 
   String get _label => switch (selected) {
-        _PlanTier.yearly => '7 Tage gratis testen',
-        _PlanTier.lifetime => 'Einmalig freischalten',
-        _PlanTier.monthly => 'Pro abonnieren',
-      };
+    _PlanTier.yearly => '7 Tage gratis testen',
+    _PlanTier.lifetime => 'Einmalig freischalten',
+    _PlanTier.monthly => 'Pro abonnieren',
+  };
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: ApexColors.primary.withValues(alpha: 0.45),
-            blurRadius: 24,
-            spreadRadius: 2,
-            offset: const Offset(0, 6),
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: ApexColors.primary.withValues(alpha: 0.45),
+                blurRadius: 24,
+                spreadRadius: 2,
+                offset: const Offset(0, 6),
+              ),
+            ],
+            gradient: const LinearGradient(
+              colors: [ApexColors.primary, Color(0xFF00E0A0)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
           ),
-        ],
-        gradient: const LinearGradient(
-          colors: [ApexColors.primary, Color(0xFF00E0A0)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: busy ? null : onPressed,
-          borderRadius: BorderRadius.circular(14),
-          child: Center(
-            child: busy
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: Colors.black,
-                    ),
-                  )
-                : Text(
-                    _label,
-                    style: const TextStyle(
-                      fontFamily: 'Rajdhani',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                      letterSpacing: 0.8,
-                      color: Colors.black,
-                    ),
-                  ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: busy ? null : onPressed,
+              borderRadius: BorderRadius.circular(14),
+              child: Center(
+                child: busy
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: Colors.black,
+                        ),
+                      )
+                    : Text(
+                        _label,
+                        style: const TextStyle(
+                          fontFamily: 'Rajdhani',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17,
+                          letterSpacing: 0.8,
+                          color: Colors.black,
+                        ),
+                      ),
+              ),
+            ),
           ),
-        ),
-      ),
-    )
+        )
         .animate(onPlay: (c) => c.repeat(reverse: true))
         .scaleXY(
           begin: 1.0,
@@ -746,9 +735,6 @@ class _GlowCta extends StatelessWidget {
         );
   }
 }
-
-
-
 
 class _BenefitsList extends StatelessWidget {
   static const _benefits = [
@@ -767,9 +753,7 @@ class _BenefitsList extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface.withValues(alpha: 0.75),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: ApexColors.primary.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: ApexColors.primary.withValues(alpha: 0.25)),
         boxShadow: [
           BoxShadow(
             color: ApexColors.primary.withValues(alpha: 0.08),
@@ -781,10 +765,7 @@ class _BenefitsList extends StatelessWidget {
       child: Column(
         children: [
           for (var i = 0; i < _benefits.length; i++) ...[
-            _BenefitRow(
-              icon: _benefits[i].$2,
-              label: _benefits[i].$1,
-            ),
+            _BenefitRow(icon: _benefits[i].$2, label: _benefits[i].$1),
             if (i < _benefits.length - 1)
               Divider(
                 height: 18,
@@ -861,10 +842,7 @@ class _PlanCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: bgColor,
-        border: Border.all(
-          color: borderColor,
-          width: selected ? 2 : 1,
-        ),
+        border: Border.all(color: borderColor, width: selected ? 2 : 1),
         boxShadow: selected
             ? [
                 BoxShadow(
@@ -1018,17 +996,14 @@ class _LegalFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = ApexColors.of(context);
     Widget link(String label, String url) => TextButton(
-          onPressed: () => onOpen(url),
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            minimumSize: const Size(0, 32),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(color: c.textMuted, fontSize: 11),
-          ),
-        );
+      onPressed: () => onOpen(url),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        minimumSize: const Size(0, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(label, style: TextStyle(color: c.textMuted, fontSize: 11)),
+    );
 
     return Column(
       children: [
@@ -1065,13 +1040,13 @@ class _ThankYouDialog extends StatelessWidget {
   final _PlanTier tier;
 
   String get _subtitle => switch (tier) {
-        _PlanTier.yearly =>
-          'Deine 7 Tage Probezeit laufen — danach Hooked Pro für ein ganzes Jahr.',
-        _PlanTier.lifetime =>
-          'Lebenslang Hooked Pro. Kein Abo, kein Ablauf — einfach angeln.',
-        _PlanTier.monthly =>
-          'Hooked Pro ist freigeschaltet. Verlängert sich monatlich, jederzeit kündbar.',
-      };
+    _PlanTier.yearly =>
+      'Deine 7 Tage Probezeit laufen — danach Hooked Pro für ein ganzes Jahr.',
+    _PlanTier.lifetime =>
+      'Lebenslang Hooked Pro. Kein Abo, kein Ablauf — einfach angeln.',
+    _PlanTier.monthly =>
+      'Hooked Pro ist freigeschaltet. Verlängert sich monatlich, jederzeit kündbar.',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1115,29 +1090,29 @@ class _ThankYouDialog extends StatelessWidget {
                 children: [
                   // Glow-Check-Icon
                   Container(
-                    width: 92,
-                    height: 92,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [accent, Color(0xFF00E0A0)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: accent.withValues(alpha: 0.55),
-                          blurRadius: 28,
-                          spreadRadius: 2,
+                        width: 92,
+                        height: 92,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [accent, Color(0xFF00E0A0)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.55),
+                              blurRadius: 28,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 56,
-                      color: Colors.black,
-                    ),
-                  )
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 56,
+                          color: Colors.black,
+                        ),
+                      )
                       .animate()
                       .scaleXY(
                         begin: 0.4,
@@ -1148,27 +1123,28 @@ class _ThankYouDialog extends StatelessWidget {
                       .fadeIn(duration: 240.ms),
                   const SizedBox(height: 18),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(20),
-                      border:
-                          Border.all(color: accent.withValues(alpha: 0.45)),
-                    ),
-                    child: const Text(
-                      'HOOKED PRO',
-                      style: TextStyle(
-                        fontFamily: 'Rajdhani',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2.4,
-                        color: accent,
-                      ),
-                    ),
-                  )
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: accent.withValues(alpha: 0.45),
+                          ),
+                        ),
+                        child: const Text(
+                          'HOOKED PRO',
+                          style: TextStyle(
+                            fontFamily: 'Rajdhani',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2.4,
+                            color: accent,
+                          ),
+                        ),
+                      )
                       .animate(onPlay: (c) => c.repeat(period: 3.seconds))
                       .shimmer(
                         duration: 1600.ms,
@@ -1176,17 +1152,17 @@ class _ThankYouDialog extends StatelessWidget {
                       ),
                   const SizedBox(height: 14),
                   Text(
-                    'Danke, Captain!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Rajdhani',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: c.textPrimary,
-                      letterSpacing: -0.4,
-                      height: 1.1,
-                    ),
-                  )
+                        'Danke, Captain!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Rajdhani',
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: c.textPrimary,
+                          letterSpacing: -0.4,
+                          height: 1.1,
+                        ),
+                      )
                       .animate()
                       .fadeIn(delay: 200.ms, duration: 320.ms)
                       .slideY(

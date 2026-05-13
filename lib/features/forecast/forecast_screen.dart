@@ -36,7 +36,11 @@ final _forecastWeatherProvider = FutureProvider<WeatherData?>((ref) async {
   final lat = override?.latitude ?? pos?.latitude ?? 48.137154;
   final lng = override?.longitude ?? pos?.longitude ?? 11.576124;
 
-  final forecast = await WeatherService().fetchDailyForecast(lat, lng, selected);
+  final forecast = await WeatherService().fetchDailyForecast(
+    lat,
+    lng,
+    selected,
+  );
   if (forecast == null) return null;
 
   // Temperatur stündlich interpolieren (Peak ~14 Uhr, Minimum ~5 Uhr).
@@ -49,8 +53,8 @@ final _forecastWeatherProvider = FutureProvider<WeatherData?>((ref) async {
     } else {
       factor = ((24 - h) / 10.0).clamp(0.0, 1.0); // Abkühlen 14→24 Uhr
     }
-    temp = forecast.tempMinC! +
-        (forecast.tempMaxC! - forecast.tempMinC!) * factor;
+    temp =
+        forecast.tempMinC! + (forecast.tempMaxC! - forecast.tempMinC!) * factor;
   } else {
     temp = forecast.tempMaxC ?? forecast.tempMinC;
   }
@@ -164,8 +168,9 @@ class ForecastScreen extends ConsumerWidget {
                       longitude: lng,
                       date: selectedDt,
                       title: isToday ? 'WETTER HEUTE' : 'WETTER',
-                      liveTrend3hHpa:
-                          isToday ? weather?.pressureTendency3hHpa : null,
+                      liveTrend3hHpa: isToday
+                          ? weather?.pressureTendency3hHpa
+                          : null,
                       liveAbsoluteHpa: isToday ? weather?.pressureHpa : null,
                       liveWeather: isToday ? weather : null,
                     );
@@ -634,9 +639,7 @@ class _MoonPhaseCard extends StatelessWidget {
         child: Stack(
           children: [
             // Sterne-Hintergrund
-            Positioned.fill(
-              child: CustomPaint(painter: _StarfieldPainter()),
-            ),
+            Positioned.fill(child: CustomPaint(painter: _StarfieldPainter())),
 
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -661,9 +664,7 @@ class _MoonPhaseCard extends StatelessWidget {
                       SizedBox(
                         width: 96,
                         height: 96,
-                        child: CustomPaint(
-                          painter: _MoonPainter(phase: phase),
-                        ),
+                        child: CustomPaint(painter: _MoonPainter(phase: phase)),
                       ),
                       const SizedBox(width: 24),
 
@@ -737,8 +738,8 @@ class _MoonPhaseCard extends StatelessWidget {
                               influence > 0.7
                                   ? 'Starker Einfluss auf Aktivität'
                                   : influence > 0.4
-                                      ? 'Moderater Einfluss'
-                                      : 'Geringer Einfluss',
+                                  ? 'Moderater Einfluss'
+                                  : 'Geringer Einfluss',
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFF6677AA),
@@ -779,7 +780,12 @@ class _MoonPainter extends CustomPainter {
         c,
         r + 14,
         Paint()
-          ..color = Color.fromARGB((illum * 55).round().clamp(0, 80), 255, 235, 155)
+          ..color = Color.fromARGB(
+            (illum * 55).round().clamp(0, 80),
+            255,
+            235,
+            155,
+          )
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
       );
     }
@@ -805,7 +811,11 @@ class _MoonPainter extends CustomPainter {
       } else {
         // Terminator-Ellipse x-Radius: 0 bei Viertelmond, r bei Neu-/Vollmond
         final xr = max(1.5, r * (1.0 - 2.0 * illum).abs());
-        final termRect = Rect.fromCenter(center: c, width: xr * 2, height: r * 2);
+        final termRect = Rect.fromCenter(
+          center: c,
+          width: xr * 2,
+          height: r * 2,
+        );
 
         // Lit-Bereich: Außenbogen (Hälfte des Mondkreises) +
         //              Terminatorbogen (Sichelinnenkante).
@@ -867,10 +877,22 @@ class _MoonPainter extends CustomPainter {
 /// Zufällige Sternenpunkte — deterministisch via fester Seed-Positionen.
 class _StarfieldPainter extends CustomPainter {
   static const _stars = [
-    (0.05, 0.12), (0.92, 0.08), (0.15, 0.75), (0.80, 0.60),
-    (0.35, 0.05), (0.68, 0.90), (0.50, 0.30), (0.22, 0.55),
-    (0.88, 0.40), (0.10, 0.90), (0.75, 0.20), (0.60, 0.70),
-    (0.40, 0.85), (0.95, 0.55), (0.28, 0.35), (0.82, 0.78),
+    (0.05, 0.12),
+    (0.92, 0.08),
+    (0.15, 0.75),
+    (0.80, 0.60),
+    (0.35, 0.05),
+    (0.68, 0.90),
+    (0.50, 0.30),
+    (0.22, 0.55),
+    (0.88, 0.40),
+    (0.10, 0.90),
+    (0.75, 0.20),
+    (0.60, 0.70),
+    (0.40, 0.85),
+    (0.95, 0.55),
+    (0.28, 0.35),
+    (0.82, 0.78),
   ];
 
   @override
@@ -941,8 +963,12 @@ class _DateTimePickerCardState extends ConsumerState<_DateTimePickerCard> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 600), () {
       final d = _days[idx];
-      ref.read(selectedForecastDateTimeProvider.notifier).state =
-          DateTime(d.year, d.month, d.day, _selHour);
+      ref.read(selectedForecastDateTimeProvider.notifier).state = DateTime(
+        d.year,
+        d.month,
+        d.day,
+        _selHour,
+      );
     });
   }
 
@@ -951,8 +977,12 @@ class _DateTimePickerCardState extends ConsumerState<_DateTimePickerCard> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 600), () {
       final d = _days[_selDay];
-      ref.read(selectedForecastDateTimeProvider.notifier).state =
-          DateTime(d.year, d.month, d.day, hour);
+      ref.read(selectedForecastDateTimeProvider.notifier).state = DateTime(
+        d.year,
+        d.month,
+        d.day,
+        hour,
+      );
     });
   }
 
@@ -1216,5 +1246,3 @@ class _DateTimePickerLocked extends ConsumerWidget {
     );
   }
 }
-
-

@@ -155,10 +155,10 @@ class CloudSyncService {
     for (final spec in _tables) {
       reset['push_${spec.table}'] = 0;
     }
-    await userDoc.collection('meta').doc('sync').set(
-      reset,
-      SetOptions(merge: true),
-    );
+    await userDoc
+        .collection('meta')
+        .doc('sync')
+        .set(reset, SetOptions(merge: true));
     await syncNow();
   }
 
@@ -204,9 +204,9 @@ class CloudSyncService {
       // Offline-Cache und der Status springt fälschlich auf „Erfolg",
       // obwohl der Server die Daten nie erhalten hat.
       try {
-        await _firestore
-            .waitForPendingWrites()
-            .timeout(const Duration(seconds: 30));
+        await _firestore.waitForPendingWrites().timeout(
+          const Duration(seconds: 30),
+        );
       } on TimeoutException {
         throw Exception(
           'Server hat die Schreibvorgänge nicht innerhalb von 30 s '
@@ -250,9 +250,7 @@ class CloudSyncService {
 
   // ─── Pull ──────────────────────────────────────────────────────────────
 
-  Future<int> _pullAll(
-    DocumentReference<Map<String, dynamic>> userDoc,
-  ) async {
+  Future<int> _pullAll(DocumentReference<Map<String, dynamic>> userDoc) async {
     var applied = 0;
     final uid = userDoc.id;
     for (final spec in _tables) {
@@ -361,14 +359,13 @@ class CloudSyncService {
       // Firestore-Batches max 500 Operationen.
       var maxUpdatedAt = lastPush;
       for (var i = 0; i < delta.length; i += 400) {
-        final chunk = delta.sublist(
-          i,
-          (i + 400).clamp(0, delta.length),
-        );
+        final chunk = delta.sublist(i, (i + 400).clamp(0, delta.length));
         final batch = _firestore.batch();
         for (final row in chunk) {
           final doc = await _buildRemoteDoc(spec, row);
-          final ref = userDoc.collection(spec.table).doc('${row[spec.idColumn]}');
+          final ref = userDoc
+              .collection(spec.table)
+              .doc('${row[spec.idColumn]}');
           batch.set(ref, doc);
           final ts = row['updated_at'];
           if (ts is int && ts > maxUpdatedAt) maxUpdatedAt = ts;
@@ -387,7 +384,11 @@ class CloudSyncService {
     final id = row[spec.idColumn]?.toString();
     if (id == null) return out;
     if (spec.subTable != null && spec.subParentColumn != null) {
-      out['_sub'] = await _db.getSubRows(spec.subTable!, spec.subParentColumn!, id);
+      out['_sub'] = await _db.getSubRows(
+        spec.subTable!,
+        spec.subParentColumn!,
+        id,
+      );
     }
     if (spec.table == 'waterbodies') {
       out['_closed_seasons'] = await _db.getSubRows(
@@ -421,10 +422,9 @@ class CloudSyncService {
     String key,
     int value,
   ) async {
-    await userDoc
-        .collection('meta')
-        .doc('sync')
-        .set({key: value}, SetOptions(merge: true));
+    await userDoc.collection('meta').doc('sync').set({
+      key: value,
+    }, SetOptions(merge: true));
   }
 
   // ─── Lokaler Pull-Cursor (per UID) ──────────────────────────────────────

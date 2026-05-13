@@ -10,10 +10,8 @@ import 'package:flutter/foundation.dart';
 import 'notification_service.dart';
 
 /// Projekt nutzt eine named Firestore-Datenbank `default`.
-FirebaseFirestore get _firestore => FirebaseFirestore.instanceFor(
-      app: Firebase.app(),
-      databaseId: 'default',
-    );
+FirebaseFirestore get _firestore =>
+    FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
 
 /// Verwaltet den FCM-Token des aktuellen Users in Firestore und sorgt
 /// dafür, dass Token-Refreshes serverseitig sichtbar werden.

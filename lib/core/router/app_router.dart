@@ -54,7 +54,10 @@ import '../theme/app_theme.dart';
 class _AuthRouterRefreshNotifier extends ChangeNotifier {
   _AuthRouterRefreshNotifier(Ref ref) {
     ref.listen<dynamic>(currentUserProvider, (_, __) => notifyListeners());
-    ref.listen<dynamic>(needsProfileSetupProvider, (_, __) => notifyListeners());
+    ref.listen<dynamic>(
+      needsProfileSetupProvider,
+      (_, __) => notifyListeners(),
+    );
   }
 }
 
@@ -128,227 +131,220 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 /// Darf NICHT als top-level `final` gespeichert werden, da go_router
 /// den Key intern bei der Instanzerzeugung fest verdrahtet.
 List<RouteBase> _buildRoutes() => [
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) =>
-          _ScaffoldWithNavBar(navigationShell: navigationShell),
-      branches: [
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/catches',
-              builder: (_, __) => const CatchListScreen(),
-              routes: [
-                GoRoute(
-                  path: 'add',
-                  builder: (context, state) {
-                    final extra = state.extra;
-                    if (extra is CatchEntry) {
-                      return AddEditCatchScreen(prefill: extra);
-                    }
-                    return const AddEditCatchScreen();
-                  },
-                ),
-                GoRoute(
-                  path: 'edit',
-                  builder: (context, state) {
-                    final entry = state.extra as CatchEntry;
-                    return AddEditCatchScreen(existing: entry);
-                  },
-                ),
-                GoRoute(
-                  path: 'detail',
-                  builder: (context, state) {
-                    final extra = state.extra;
-                    if (extra is CatchDetailArgs) {
-                      return CatchDetailScreen(
-                        entry: extra.entry,
-                        siblingIds: extra.siblingIds,
-                      );
-                    }
-                    final entry = extra as CatchEntry;
-                    return CatchDetailScreen(entry: entry);
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/spots',
-              // Hub mit beiden Tabs (Gewässer + Spots) — erreichbar über
-              // den Hauptnav-Button "Gewässer". Die Sub-Routen /spots/add,
-              // /spots/edit, /spots/detail bleiben unverändert und werden
-              // aus dem Hub heraus gepusht.
-              builder: (_, __) => const WaterHubScreen(),
-              routes: [
-                GoRoute(
-                  path: 'add',
-                  builder: (context, state) {
-                    final extra = state.extra;
-                    if (extra is Map) {
-                      return AddEditSpotScreen(
-                        prefillLat: extra['lat'] as double?,
-                        prefillLng: extra['lng'] as double?,
-                        prefillName: extra['name'] as String?,
-                      );
-                    }
-                    return const AddEditSpotScreen();
-                  },
-                ),
-                GoRoute(
-                  path: 'edit',
-                  builder: (context, state) {
-                    final spot = state.extra as FishingSpot;
-                    return AddEditSpotScreen(existing: spot);
-                  },
-                ),
-                GoRoute(
-                  path: 'detail',
-                  builder: (context, state) {
-                    final extra = state.extra;
-                    if (extra is SpotDetailArgs) {
-                      return SpotDetailScreen(
-                        spot: extra.spot,
-                        siblingIds: extra.siblingIds,
-                      );
-                    }
-                    final spot = extra as FishingSpot;
-                    return SpotDetailScreen(spot: spot);
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/trips',
-              builder: (_, __) => const TripListScreen(),
-              routes: [
-                GoRoute(
-                  path: 'add',
-                  builder: (_, __) => const AddEditTripScreen(),
-                ),
-                GoRoute(
-                  path: 'edit',
-                  builder: (context, state) {
-                    final trip = state.extra as Trip;
-                    return AddEditTripScreen(existing: trip);
-                  },
-                ),
-                GoRoute(
-                  path: 'detail',
-                  builder: (context, state) {
-                    final trip = state.extra as Trip;
-                    return TripDetailScreen(trip: trip);
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/feed',
-              builder: (_, state) {
-                final extra = state.extra;
-                String? postId;
-                bool openComments = false;
-                int requestId = 0;
-                if (extra is String) {
-                  postId = extra;
-                } else if (extra is Map) {
-                  postId = extra['postId'] as String?;
-                  openComments = extra['openComments'] == true;
-                  final r = extra['requestId'];
-                  if (r is int) requestId = r;
-                }
-                return FeedScreen(
-                  initialPostId: postId,
-                  openComments: openComments,
-                  commentsRequestId: requestId,
-                );
-              },
-            ),
-          ],
-        ),
-      ],
-    ),
-    // Missionen — außerhalb der Shell, wird als Top-Level-Route gepusht
-    GoRoute(path: '/missions', builder: (_, __) => const MissionsScreen()),
-    GoRoute(path: '/lure-levels', builder: (_, __) => const LureLevelsScreen()),
-    GoRoute(path: '/lexicon', builder: (_, __) => const LexiconScreen()),
-    GoRoute(path: '/water-days', builder: (_, __) => const WaterDaysScreen()),
-    GoRoute(path: '/records', builder: (_, __) => const RecordsScreen()),
-    GoRoute(path: '/revier', builder: (_, __) => const RevierScreen()),
-    GoRoute(
-      path: '/waterbodies',
-      builder: (_, __) => const WaterbodiesScreen(),
-      routes: [
-        GoRoute(
-          path: 'add',
-          builder: (_, __) => const AddEditWaterbodyScreen(),
-        ),
-        GoRoute(
-          path: 'detail',
-          builder: (context, state) {
-            final wb = state.extra as Waterbody;
-            return WaterbodyDetailScreen(waterbody: wb);
-          },
-        ),
-        GoRoute(
-          path: 'edit',
-          builder: (context, state) {
-            final wb = state.extra as Waterbody;
-            return AddEditWaterbodyScreen(existing: wb);
-          },
-        ),
-      ],
-    ),
-    GoRoute(path: '/forecast', builder: (_, __) => const ForecastScreen()),
-    GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
-    GoRoute(
-      path: '/settings/notifications',
-      builder: (_, __) => const NotificationSettingsScreen(),
-    ),
-    GoRoute(
-      path: '/settings/blocked',
-      builder: (_, __) => const BlockedUsersScreen(),
-    ),
-    GoRoute(
-      path: '/settings/community-guidelines',
-      builder: (_, __) => const CommunityGuidelinesScreen(),
-    ),
-    // Auth — außerhalb der Shell
-    GoRoute(path: '/auth', builder: (_, __) => const AuthScreen()),
-    GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-    GoRoute(
-      path: '/profile/edit',
-      builder: (_, __) => const EditProfileScreen(),
-    ),
-    GoRoute(
-      path: '/profile-setup',
-      builder: (_, __) => const ProfileSetupScreen(),
-    ),
-    GoRoute(
-      path: '/user/:uid',
-      builder: (_, state) =>
-          UserProfileScreen(uid: state.pathParameters['uid']!),
-    ),
-    GoRoute(
-      path: '/notifications',
-      builder: (_, __) => const NotificationsScreen(),
-    ),
-    // Onboarding — beim ersten Start
-    GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
-    GoRoute(path: '/consent', builder: (_, __) => const ConsentScreen()),
-    // Paywall — Pro-Upgrade (Stub bis RevenueCat live ist)
-    GoRoute(path: '/paywall', builder: (_, __) => const PaywallScreen()),
-  ];
+  StatefulShellRoute.indexedStack(
+    builder: (context, state, navigationShell) =>
+        _ScaffoldWithNavBar(navigationShell: navigationShell),
+    branches: [
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/catches',
+            builder: (_, __) => const CatchListScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) {
+                  final extra = state.extra;
+                  if (extra is CatchEntry) {
+                    return AddEditCatchScreen(prefill: extra);
+                  }
+                  return const AddEditCatchScreen();
+                },
+              ),
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) {
+                  final entry = state.extra as CatchEntry;
+                  return AddEditCatchScreen(existing: entry);
+                },
+              ),
+              GoRoute(
+                path: 'detail',
+                builder: (context, state) {
+                  final extra = state.extra;
+                  if (extra is CatchDetailArgs) {
+                    return CatchDetailScreen(
+                      entry: extra.entry,
+                      siblingIds: extra.siblingIds,
+                    );
+                  }
+                  final entry = extra as CatchEntry;
+                  return CatchDetailScreen(entry: entry);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/spots',
+            // Hub mit beiden Tabs (Gewässer + Spots) — erreichbar über
+            // den Hauptnav-Button "Gewässer". Die Sub-Routen /spots/add,
+            // /spots/edit, /spots/detail bleiben unverändert und werden
+            // aus dem Hub heraus gepusht.
+            builder: (_, __) => const WaterHubScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) {
+                  final extra = state.extra;
+                  if (extra is Map) {
+                    return AddEditSpotScreen(
+                      prefillLat: extra['lat'] as double?,
+                      prefillLng: extra['lng'] as double?,
+                      prefillName: extra['name'] as String?,
+                    );
+                  }
+                  return const AddEditSpotScreen();
+                },
+              ),
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) {
+                  final spot = state.extra as FishingSpot;
+                  return AddEditSpotScreen(existing: spot);
+                },
+              ),
+              GoRoute(
+                path: 'detail',
+                builder: (context, state) {
+                  final extra = state.extra;
+                  if (extra is SpotDetailArgs) {
+                    return SpotDetailScreen(
+                      spot: extra.spot,
+                      siblingIds: extra.siblingIds,
+                    );
+                  }
+                  final spot = extra as FishingSpot;
+                  return SpotDetailScreen(spot: spot);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/trips',
+            builder: (_, __) => const TripListScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (_, __) => const AddEditTripScreen(),
+              ),
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) {
+                  final trip = state.extra as Trip;
+                  return AddEditTripScreen(existing: trip);
+                },
+              ),
+              GoRoute(
+                path: 'detail',
+                builder: (context, state) {
+                  final trip = state.extra as Trip;
+                  return TripDetailScreen(trip: trip);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/feed',
+            builder: (_, state) {
+              final extra = state.extra;
+              String? postId;
+              bool openComments = false;
+              int requestId = 0;
+              if (extra is String) {
+                postId = extra;
+              } else if (extra is Map) {
+                postId = extra['postId'] as String?;
+                openComments = extra['openComments'] == true;
+                final r = extra['requestId'];
+                if (r is int) requestId = r;
+              }
+              return FeedScreen(
+                initialPostId: postId,
+                openComments: openComments,
+                commentsRequestId: requestId,
+              );
+            },
+          ),
+        ],
+      ),
+    ],
+  ),
+  // Missionen — außerhalb der Shell, wird als Top-Level-Route gepusht
+  GoRoute(path: '/missions', builder: (_, __) => const MissionsScreen()),
+  GoRoute(path: '/lure-levels', builder: (_, __) => const LureLevelsScreen()),
+  GoRoute(path: '/lexicon', builder: (_, __) => const LexiconScreen()),
+  GoRoute(path: '/water-days', builder: (_, __) => const WaterDaysScreen()),
+  GoRoute(path: '/records', builder: (_, __) => const RecordsScreen()),
+  GoRoute(path: '/revier', builder: (_, __) => const RevierScreen()),
+  GoRoute(
+    path: '/waterbodies',
+    builder: (_, __) => const WaterbodiesScreen(),
+    routes: [
+      GoRoute(path: 'add', builder: (_, __) => const AddEditWaterbodyScreen()),
+      GoRoute(
+        path: 'detail',
+        builder: (context, state) {
+          final wb = state.extra as Waterbody;
+          return WaterbodyDetailScreen(waterbody: wb);
+        },
+      ),
+      GoRoute(
+        path: 'edit',
+        builder: (context, state) {
+          final wb = state.extra as Waterbody;
+          return AddEditWaterbodyScreen(existing: wb);
+        },
+      ),
+    ],
+  ),
+  GoRoute(path: '/forecast', builder: (_, __) => const ForecastScreen()),
+  GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+  GoRoute(
+    path: '/settings/notifications',
+    builder: (_, __) => const NotificationSettingsScreen(),
+  ),
+  GoRoute(
+    path: '/settings/blocked',
+    builder: (_, __) => const BlockedUsersScreen(),
+  ),
+  GoRoute(
+    path: '/settings/community-guidelines',
+    builder: (_, __) => const CommunityGuidelinesScreen(),
+  ),
+  // Auth — außerhalb der Shell
+  GoRoute(path: '/auth', builder: (_, __) => const AuthScreen()),
+  GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+  GoRoute(path: '/profile/edit', builder: (_, __) => const EditProfileScreen()),
+  GoRoute(
+    path: '/profile-setup',
+    builder: (_, __) => const ProfileSetupScreen(),
+  ),
+  GoRoute(
+    path: '/user/:uid',
+    builder: (_, state) => UserProfileScreen(uid: state.pathParameters['uid']!),
+  ),
+  GoRoute(
+    path: '/notifications',
+    builder: (_, __) => const NotificationsScreen(),
+  ),
+  // Onboarding — beim ersten Start
+  GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+  GoRoute(path: '/consent', builder: (_, __) => const ConsentScreen()),
+  // Paywall — Pro-Upgrade (Stub bis RevenueCat live ist)
+  GoRoute(path: '/paywall', builder: (_, __) => const PaywallScreen()),
+];
 
 class _ScaffoldWithNavBar extends ConsumerStatefulWidget {
   const _ScaffoldWithNavBar({required this.navigationShell});

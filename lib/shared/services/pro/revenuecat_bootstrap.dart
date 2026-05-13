@@ -84,9 +84,7 @@ class RevenueCatBootstrap {
       return;
     }
     try {
-      await Purchases.setLogLevel(
-        kDebugMode ? LogLevel.debug : LogLevel.warn,
-      );
+      await Purchases.setLogLevel(kDebugMode ? LogLevel.debug : LogLevel.warn);
       await Purchases.configure(PurchasesConfiguration(key));
       _initialized = true;
       Purchases.addCustomerInfoUpdateListener((info) {
@@ -100,7 +98,9 @@ class RevenueCatBootstrap {
         lastCustomerInfo = info;
         _logInfo('init-snapshot', info);
         if (!_controller.isClosed) _controller.add(info);
-      } catch (_) {/* okay, Listener wird sich melden */}
+      } catch (_) {
+        /* okay, Listener wird sich melden */
+      }
       if (kDebugMode) {
         // ignore: avoid_print
         print('[RevenueCat] initialized (key=${key.substring(0, 8)}…)');
@@ -153,7 +153,9 @@ class RevenueCatBootstrap {
     try {
       await Purchases.logOut();
       _currentRcUid = null;
-    } catch (_) {/* z.B. wenn schon anonym */}
+    } catch (_) {
+      /* z.B. wenn schon anonym */
+    }
   }
 
   /// Prüft anhand des Entitlements, ob der User Pro ist. Akzeptiert
